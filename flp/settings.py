@@ -41,6 +41,7 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
     'rest_framework',
+    'django_cleanup.apps.CleanupConfig',
     'knox',
     'corsheaders',
     'accounts',
@@ -159,7 +160,7 @@ REST_FRAMEWORK = {
 CORS_ORIGIN_WHITELIST = 'localhost:3000',
 
 
-CONTENT_TYPES = ['image', 'pdf', 'zip']
+ACCEPT_TYPES = ['jpg', 'png', 'tif', 'gif', 'jpeg', 'bmp', 'psd', 'pdf', 'zip', 'rar', 'tar', '7z']
 MAX_UPLOAD_SIZE = '20971520'
 
 

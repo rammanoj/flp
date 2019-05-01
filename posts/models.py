@@ -6,7 +6,7 @@ from django.utils import timezone
 class Team(models.Model):
     name = models.CharField(max_length=100, unique=True)
     about = models.TextField()
-    created_by = models.ForeignKey(User, null=True, blank=True, on_delete=models.SET_NULL)
+    created_by = models.ForeignKey(User, null=True, blank=True, on_delete=models.CASCADE)
     created_on = models.DateTimeField(default=timezone.now)
     user = models.ManyToManyField(User, related_name='team_members')
 
@@ -15,14 +15,15 @@ class Team(models.Model):
 
 
 class Post(models.Model):
-    item = models.FileField(upload_to='media/uploads/')
+    header = models.CharField(max_length=50)
     created_by = models.ForeignKey(User, on_delete=models.CASCADE)
     created_on = models.DateTimeField(default=timezone.now)
     about = models.TextField()
     team = models.ForeignKey(Team, on_delete=models.CASCADE)
+    file = models.FileField(upload_to='uploads/')
 
     def __str__(self):
-        return self.team.__str__()
+        return self.team.__str__() + " -- " + self.header
 
 
 class PostComment(models.Model):
@@ -40,6 +41,9 @@ class PostAction(models.Model):
     post = models.ForeignKey(Post, on_delete=models.CASCADE)
     user = models.ForeignKey(User, on_delete=models.CASCADE)
     created_on = models.DateTimeField(default=timezone.now)
+
+    class Meta:
+        unique_together = ('post', 'user')
 
     def __str__(self):
         return self.post.__str__() + " " + self.user.__str__()

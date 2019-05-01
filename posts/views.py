@@ -5,6 +5,7 @@ from django.contrib.auth.models import User
 from django.core.exceptions import ValidationError
 from django.core.validators import validate_email
 from django.db import transaction
+from django.db.models import Q
 from django.shortcuts import get_object_or_404
 from rest_framework import status
 from rest_framework.response import Response
@@ -24,7 +25,9 @@ class TeamCreateView(CreateAPIView):
     def post(self, request, *args, **kwargs):
         request.data['created_by'] = request.user.pk
         request.data['user'] = {}
-        return super(TeamCreateView, self).post(request, *args, *kwargs)
+        context = super(TeamCreateView, self).post(request, *args, *kwargs)
+        context.data['created_by'] = get_object_or_404(User, pk=context.data['created_by']).username
+        return context
 
 
 class TeamListView(ListAPIView):
@@ -32,6 +35,12 @@ class TeamListView(ListAPIView):
 
     def get_queryset(self):
         return models.Team.objects.filter(user=self.request.user)
+
+    def get(self, request, *args, **kwargs):
+        context = super(TeamListView, self).get(request, *args, **kwargs)
+        for i in context.data['results']:
+            i['created_by'] = get_object_or_404(User, pk=i['created_by']).username
+        return context
 
 
 class TeamRetrieveUpdateDestroyView(RetrieveUpdateDestroyAPIView):
@@ -151,6 +160,8 @@ class TeamAddorRemoveUser(APIView):
                         team.user.add(request.user)
                         team.save()
                         user.delete()
+                        if not users.exists():
+                            link.delete()
                     return Response({'message': 'Added you to the group', 'error': 0})
                 else:
                     user.delete()
@@ -186,7 +197,7 @@ class TeamUserListView(ListAPIView):
             return Response({'error': 1, 'message': 'Error in fetching details'}, status=status.HTTP_400_BAD_REQUEST)
 
         if request.user not in team.user.all():
-            return Response({'message': 'Permission denied', 'error': 1}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({'message': 'Permission Denied', 'error': 1}, status=status.HTTP_400_BAD_REQUEST)
 
         self.queryset = team.user.all()
         return super(TeamUserListView, self).get(request, *args, **kwargs)
@@ -209,3 +220,150 @@ class TeamUserDeleteView(DestroyAPIView):
 # End of Team Views
 
 
+class PostCreateView(CreateAPIView):
+    serializer_class = serializers.PostSerializer
+    queryset = models.Post.objects.all()
+    
+    def post(self, request, *args, **kwargs):
+        team = get_object_or_404(models.Team, pk=request.data['team'])
+        if request.user not in team.user.all():
+            return Response({'message': 'Permission denied', 'error': 1}, status=status.HTTP_400_BAD_REQUEST)
+
+        request.data._mutable = True
+        request.data['created_by'] = request.user.pk
+        request._mutable = False
+        return super(PostCreateView, self).post(request, *args, **kwargs)
+
+
+class PostRetrieveUpdateDeleteView(RetrieveUpdateDestroyAPIView):
+    serializer_class = serializers.PostSerializer
+    queryset = models.Post.objects.all()
+    http_method_names = ['patch', 'delete']
+
+    def patch(self, request, *args, **kwargs):
+        if request.user != self.get_object().created_by:
+            return Response({'message': 'Permission denied', 'error': 1}, status=status.HTTP_400_BAD_REQUEST)
+        return super(PostRetrieveUpdateDeleteView, self).patch(request, *args, **kwargs)
+
+    def delete(self, request, *args, **kwargs):
+        if request.user != self.get_object().created_by:
+            return Response({'message': 'Permission denied', 'error': 1}, status=status.HTTP_400_BAD_REQUEST)
+        super(PostRetrieveUpdateDeleteView, self).delete(request, *args, **kwargs)
+        return Response({'message': 'Successfully deleted', 'error': 0})
+
+
+class PostListView(ListAPIView):
+    serializer_class = serializers.PostSerializer
+
+    def get_queryset(self):
+        return models.Post.objects.filter(team__pk=self.kwargs['pk'])
+
+    def get(self, request, *args, **kwargs):
+        if request.user not in get_object_or_404(models.Team, pk=self.kwargs['pk']).user.all():
+            return Response({'message': 'Permission denied', 'error': 1}, status=status.HTTP_400_BAD_REQUEST)
+
+        context = super(PostListView, self).get(request, *args, **kwargs)
+        for i in context.data['results']:
+            user = User.objects.filter(pk=i['created_by'])
+            if user.exists():
+                i['created_by'] = user[0].username
+        return context
+
+
+class UpdatePostAction(APIView):
+    http_method_names = ['post']
+
+    def post(self, request, *args, **kwargs):
+        post = get_object_or_404(models.Post, pk=self.kwargs['pk'])
+        if request.user not in post.team.user.all():
+            return Response({'message': 'permission denied', 'error': 1}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            action = request.data['action']
+            pa = models.PostAction.objects.filter(Q(user=request.user), Q(post=post))
+            if pa.exists():
+                pa = pa[0]
+                pa.action = action
+                pa.save()
+            else:
+                models.PostAction.objects.create(user=request.user, action=action, post=post)
+
+        except KeyError:
+            pass
+
+        return Response({'error': 0})
+
+
+class CommentCreateView(CreateAPIView):
+    serializer_class = serializers.CommentSerializer
+    queryset = models.Post.objects.all()
+
+    def post(self, request, *args, **kwargs):
+        post = get_object_or_404(models.Post, pk=self.kwargs['pk'])
+        if request.user not in post.team.user.all():
+            return Response({'message': 'Permission denied', 'error': 1}, status=status.HTTP_400_BAD_REQUEST)
+        request.data['user'] = request.user.pk
+        request.data['post'] = post.pk
+        return super(CommentCreateView, self).post(request, *args, **kwargs)
+
+
+class CommentListView(ListAPIView):
+    serializer_class = serializers.CommentSerializer
+
+    def get_queryset(self):
+        return models.PostComment.objects.filter(post__pk=self.kwargs['pk'])
+
+    def get(self, request, *args, **kwargs):
+        post = get_object_or_404(models.Post, pk=self.kwargs['pk'])
+        if request.user not in post.team.user.all():
+            return Response({'message': 'Permission denied', 'error': 1}, status=status.HTTP_400_BAD_REQUEST)
+        return super(CommentListView, self).get(request, *args, **kwargs)
+
+
+class CommentRetrieveUpdateDestroyView(RetrieveUpdateDestroyAPIView):
+    serializer_class = serializers.CommentSerializer
+    queryset = models.PostComment.objects.all()
+    http_method_names = ['patch', 'delete']
+
+    def patch(self, request, *args, **kwargs):
+        if request.user != self.get_object().user:
+            return Response({'message': 'Permission denied', 'error': 1}, status=status.HTTP_400_BAD_REQUEST)
+        return super(CommentRetrieveUpdateDestroyView, self).patch(request, *args, **kwargs)
+
+    def delete(self, request, *args, **kwargs):
+        if request.user != self.get_object().user:
+            return Response({'message': 'Permission denied', 'error': 1}, status=status.HTTP_400_BAD_REQUEST)
+        super(CommentRetrieveUpdateDestroyView, self).delete(request, *args, **kwargs)
+        return Response({'message': 'Successfully deleted', 'error': 0})
+
+
+class ReCommentCreateView(CreateAPIView):
+    serializer_class = serializers.ReCommentSerializer
+
+    def get_queryset(self):
+        return models.PostReComment.objects.all()
+
+    def post(self, request, *args, **kwargs):
+        comment = get_object_or_404(models.PostComment, pk=self.kwargs['pk'])
+        if request.user not in comment.post.team.user.all():
+            return Response({'message': 'Permission denied', 'error': 1}, status=status.HTTP_400_BAD_REQUEST)
+        request.data['user'] = request.user.pk
+        request.data['comment'] = self.kwargs['pk']
+        return super(ReCommentCreateView, self).post(request, *args, **kwargs)
+
+
+class ReCommentRetrieveUpdateDestroyView(RetrieveUpdateDestroyAPIView):
+    serializer_class = serializers.ReCommentSerializer
+    queryset = models.PostReComment.objects.all()
+    http_method_names = ['patch', 'delete']
+
+    def patch(self, request, *args, **kwargs):
+        if request.user != self.get_object().user:
+            return Response({'message': 'Permission denied', 'error': 1}, status=status.HTTP_400_BAD_REQUEST)
+        return super(ReCommentRetrieveUpdateDestroyView, self).patch(request, *args, **kwargs)
+
+    def delete(self, request, *args, **kwargs):
+        if request.user != self.get_object().user:
+            return Response({'message': 'Permission denied', 'error': 1}, status=status.HTTP_400_BAD_REQUEST)
+        super(ReCommentRetrieveUpdateDestroyView, self).delete(request, *args, **kwargs)
+        return Response({'message': 'Successfully deleted', 'error': 0})
