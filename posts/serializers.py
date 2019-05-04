@@ -20,6 +20,13 @@ class TeamSerializer(serializers.ModelSerializer):
     edit = serializers.SerializerMethodField()
     user = UserSerializer(read_only=True)
 
+    def to_representation(self, instance):
+        data = super(TeamSerializer, self).to_representation(instance)
+        user = User.objects.filter(pk=data['created_by'])
+        if user.exists():
+            data['created_by'] = user[0].username
+        return data
+
     def get_edit(self, obj):
         return obj.created_by == self.context['request'].user
 
@@ -64,6 +71,14 @@ class PostActionSerializer(serializers.ModelSerializer):
 class PostSerializer(serializers.ModelSerializer):
     postaction_set = PostActionSerializer(read_only=True, many=True)
     edit = serializers.SerializerMethodField()
+    like = serializers.SerializerMethodField()
+    unlike = serializers.SerializerMethodField()
+
+    def get_like(self, obj):
+        return len(models.PostAction.objects.filter(Q(post__team=obj), Q(action="like")))
+
+    def get_unlike(self, obj):
+        return len(models.PostAction.objects.filter(Q(post__team=obj), Q(action="unlike")))
 
     def get_edit(self, obj):
         return obj.created_by == self.context['request'].user
@@ -152,4 +167,11 @@ class CommentSerializer(serializers.ModelSerializer):
         fields = ['comment', 'post', 'created_on', 'user', 'pk', 'edit', 'postrecomment_set']
         read_only_fields = ['created_on', 'pk', 'edit', 'postrecomment_set']
 
+
+class NotificationSerializer(serializers.ModelSerializer):
+
+    class Meta:
+        model = models.Notification
+        fields = '__all__'
+        read_only_fields = '__all__'
 

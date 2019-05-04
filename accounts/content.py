@@ -52,3 +52,20 @@ invite['message'] = []
 invite['message'].append("Hello, <br /> You are been invited to the group ")
 invite['message'].append("If you wish to join the group, <a href=" + BASE_URL + "team/invite")
 invite['message'].append(">Click here</a>, else ignore the mail.")
+
+
+new_post = {}
+new_post['subject'] = 'New Post added At BrandFactory Inc'
+new_post['message'] = []
+new_post['message'].append('A new post is added to the group ')
+new_post['message'].append(' by the user. ')
+new_post['message'].append('To view the post on the website ')
+
+
+update_psot = {}
+update_psot['subject'] = 'Update in a Post At BrandFactory Inc'
+update_psot['message'] = []
+update_psot['message'].append('The post ')
+update_psot['message'].append(' has been updated by the user ')
+update_psot['message'].append(' in the group ')
+update_psot['message'].append(' to view the changes in the group.')

@@ -5,6 +5,7 @@ from oauth2client import file, client, tools
 from flp.settings import STATIC_ROOT
 from email.mime.text import MIMEText
 from . import content
+from .mail_template import mail_template
 import base64
 
 
@@ -19,18 +20,21 @@ def send_mail(service, to_mail, **kwargs):
         # user registration
         contents = content.registration['pre_message'] + content.registration['uri'] + kwargs['id'] + \
                    content.registration['post_message']
+        contents = mail_template(content.registration['subject'], contents)
         message = MIMEText(contents, 'html')
         message['subject'] = content.registration['subject']
     elif kwargs['mail_type'] == 1:
         # Email change operation
         contents = content.email_change['pre_message'] + content.email_change['uri'] + kwargs['id'] + \
                    content.email_change['post_message']
+        contents = mail_template(content.email_change['subject'], contents)
         message = MIMEText(contents, 'html')
         message['subject'] = content.email_change['subject']
     elif kwargs['mail_type'] == 2:
         # user forgot password
         contents = content.forgot_password['pre_message'] + content.forgot_password['uri'] + \
                   kwargs['id'] + content.forgot_password['post_message']
+        contents = mail_template(content.forgot_password['subject'], contents)
         message = MIMEText(contents, 'html')
         message['subject'] = content.forgot_password['subject']
 
@@ -38,8 +42,26 @@ def send_mail(service, to_mail, **kwargs):
         # Invite User to the group
         contents = content.invite['message'][0] + "<b>" + kwargs['team'] + "</b>. " + content.invite['message'][1] + \
                     "?link=" + kwargs['invitelink'] + content.invite['message'][2]
+        contents = mail_template(content.invite['subject'], contents)
         message = MIMEText(contents, 'html')
         message['subject'] = content.invite['subject']
+        message['bcc'] = "".join(i + "," for i in kwargs['bcc'])[:-1]
+    elif kwargs['mail_type'] == 4:
+        # Create a Post
+        contents = content.new_post['message'][0] + "<b>" + kwargs['group'] + "</b>. " + content.new_post['message'][1] \
+                   + "<b>" + kwargs['user'] + "</b>" + content.new_post['message'][2] + "<a " \
+                    "href='" + kwargs['link'] + "' style='text-decoration: none;color:'#4d7ac1'>click here.</a>"
+        contents = mail_template(content.new_post['subject'], contents)
+        message = MIMEText(contents, 'html')
+        message['subject'] = content.new_post['subject']
+    elif kwargs['mail_type'] == 5:
+        # Update the POST
+        contents = content.update_psot['message'][0] + "<b>" + kwargs['post'] + "</b>. " + content.update_psot['message'][1] + \
+                   "<b>" + kwargs['user'] + "</b>" + content.update_psot['message'][2] + "<b>" + kwargs['group'] + "</b>." \
+            + "<a href='" + kwargs['link'] + "' style='text-decoration: none;color:'#4d7ac1'>Click here</a>" + content.update_psot['message'][3]
+        contents = mail_template(content.invite['subject'], contents)
+        message = MIMEText(contents, 'html')
+        message['subject'] = content.update_psot['subject']
         message['bcc'] = "".join(i + "," for i in kwargs['bcc'])[:-1]
 
     message['to'] = to_mail

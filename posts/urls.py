@@ -23,4 +23,9 @@ urlpatterns = [
     url(r'^recomment/(?P<pk>\d+)/$', views.ReCommentCreateView.as_view()),
     url(r'^recomment/update/(?P<pk>\d+)/$', views.ReCommentRetrieveUpdateDestroyView.as_view()),
 
+    # Notifications List
+    url(r'^(?P<pk>\d+)/notifications/$', views.RecentNotifications.as_view()),
+
+    url(r'^(?P<team>\d+)/post/action/(?P<action>\w+)/$', views.Actionusers.as_view())
+
 ]
