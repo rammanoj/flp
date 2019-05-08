@@ -78,8 +78,8 @@ class InviteLinkUsers(models.Model):
 class Notification(models.Model):
     group = models.ForeignKey(Team, on_delete=models.CASCADE)
     created_on = models.DateTimeField(default=timezone.now)
-    text = models.TextField(max_length=250)
-    link = models.TextField(max_length=300, null=True, blank=True)
+    text = models.CharField(max_length=250)
+    link = models.CharField(max_length=300, null=True, blank=True)
 
     def __str__(self):
         return self.group.__str__() + " -- " + self.text

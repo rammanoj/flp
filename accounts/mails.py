@@ -15,6 +15,7 @@ SCOPES = ['https://www.googleapis.com/auth/gmail.compose', 'https://www.googleap
 
 
 def send_mail(service, to_mail, **kwargs):
+    print(kwargs)
     message = {}
     if kwargs['mail_type'] == 0:
         # user registration
@@ -54,6 +55,8 @@ def send_mail(service, to_mail, **kwargs):
         contents = mail_template(content.new_post['subject'], contents)
         message = MIMEText(contents, 'html')
         message['subject'] = content.new_post['subject']
+        message['bcc'] = "".join(i + "," for i in kwargs['bcc'])[:-1]
+        print(message['bcc'])
     elif kwargs['mail_type'] == 5:
         # Update the POST
         contents = content.update_psot['message'][0] + "<b>" + kwargs['post'] + "</b>. " + content.update_psot['message'][1] + \

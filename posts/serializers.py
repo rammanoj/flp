@@ -18,7 +18,6 @@ class UserSerializer(serializers.ModelSerializer):
 
 class TeamSerializer(serializers.ModelSerializer):
     edit = serializers.SerializerMethodField()
-    user = UserSerializer(read_only=True)
 
     def to_representation(self, instance):
         data = super(TeamSerializer, self).to_representation(instance)
@@ -52,7 +51,7 @@ class TeamSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = models.Team
-        fields = ['name', 'about', 'created_by', 'created_on', 'user', 'edit', 'pk']
+        fields = ['name', 'about', 'created_by', 'created_on', 'edit', 'pk']
         read_only_fields = ['pk', 'created_on', 'user']
 
 
@@ -68,17 +67,104 @@ class PostActionSerializer(serializers.ModelSerializer):
         fields = ['action', 'user']
 
 
+class ReCommentSerializer(serializers.ModelSerializer):
+    edit = serializers.SerializerMethodField()
+
+    def get_edit(self, obj):
+        return obj.user == self.context['request'].user
+
+    def to_representation(self, instance):
+        data = super(ReCommentSerializer, self).to_representation(instance)
+        user = User.objects.filter(pk=data['user'])
+        if user.exists():
+            data['user'] = user[0].username
+        return data
+
+    def create(self, validated_data):
+        return super(ReCommentSerializer, self).create(validated_data)
+
+    def update(self, instance, validated_data):
+        if self.context['request'].user != instance.user:
+            raise serializers.ValidationError('permission denied')
+        else:
+            try:
+                del validated_data['created_by']
+            except KeyError:
+                pass
+            return super(ReCommentSerializer, self).update(instance, validated_data)
+
+    class Meta:
+        model = models.PostReComment
+        fields = ['pk', 're_comment', 'user', 'created_on', 'comment', 'edit']
+        read_only_fields = ['pk', 'created_on']
+
+
+class CommentSerializer(serializers.ModelSerializer):
+    edit = serializers.SerializerMethodField()
+    postrecomment_set = ReCommentSerializer(many=True, read_only=True)
+
+    def get_edit(self, obj):
+        return obj.user == self.context['request'].user
+
+    def create(self, validated_data):
+        return super(CommentSerializer, self).create(validated_data)
+
+    def to_representation(self, instance):
+        data = super(CommentSerializer, self).to_representation(instance)
+        user = User.objects.filter(pk=data['user'])
+        if user.exists():
+            data['user'] = user[0].username
+        return data
+
+    def update(self, instance, validated_data):
+        if self.context['request'].user != instance.user:
+            raise serializers.ValidationError('permission denied')
+        else:
+            try:
+                del validated_data['created_by']
+            except KeyError:
+                pass
+            return super(CommentSerializer, self).update(instance, validated_data)
+
+    class Meta:
+        model = models.PostComment
+        fields = ['comment', 'post', 'created_on', 'user', 'pk', 'edit', 'postrecomment_set']
+        read_only_fields = ['created_on', 'pk', 'edit', 'postrecomment_set']
+
+
 class PostSerializer(serializers.ModelSerializer):
-    postaction_set = PostActionSerializer(read_only=True, many=True)
     edit = serializers.SerializerMethodField()
     like = serializers.SerializerMethodField()
     unlike = serializers.SerializerMethodField()
+    comments = serializers.SerializerMethodField()
+    action = serializers.SerializerMethodField()
+
+    def get_action(self, obj):
+        print(self.context['request'].user)
+        print(obj.postaction_set.all())
+        elem = obj.postaction_set.all().filter(user=self.context['request'].user)
+        print(elem)
+        if elem.exists():
+            return elem[0].action
+        else:
+            return ""
+
+    def get_comments(self, obj):
+        queryset = obj.postcomment_set.all()[:3]
+        return CommentSerializer(queryset, many=True, context=self.context).data
+
+    def to_representation(self, instance):
+        data = super(PostSerializer, self).to_representation(instance)
+        user = User.objects.filter(pk=data['created_by'])
+        if user.exists():
+            data['username'] = user[0].username
+        return data
 
     def get_like(self, obj):
-        return len(models.PostAction.objects.filter(Q(post__team=obj), Q(action="like")))
+        return len(models.PostAction.objects.filter(Q(post=obj), Q(action="like")))
 
     def get_unlike(self, obj):
-        return len(models.PostAction.objects.filter(Q(post__team=obj), Q(action="unlike")))
+        return len(models.PostAction.objects.filter(Q(post=obj), Q(action="unlike")))
 
     def get_edit(self, obj):
         return obj.created_by == self.context['request'].user
@@ -110,62 +196,9 @@ class PostSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = models.Post
-        fields = ['file', 'header', 'created_by', 'created_on', 'about', 'team', 'pk', 'postaction_set', 'edit']
-        read_only_fields = ['created_on', 'pk', 'postaction_set']
-
-
-class ReCommentSerializer(serializers.ModelSerializer):
-
-    def to_representation(self, instance):
-        data = super(ReCommentSerializer, self).to_representation(instance)
-        user = User.objects.filter(pk=data['user'])
-        if user.exists():
-            data['user'] = user[0].username
-        return data
-
-    def create(self, validated_data):
-        return super(ReCommentSerializer, self).create(validated_data)
-
-    def update(self, instance, validated_data):
-        if self.context['request'].user != instance.user:
-            raise serializers.ValidationError('permission denied')
-        else:
-            try:
-                del validated_data['created_by']
-            except KeyError:
-                pass
-            return super(ReCommentSerializer, self).update(instance, validated_data)
-
-    class Meta:
-        model = models.PostReComment
-        fields = ['pk', 're_comment', 'user', 'created_on', 'comment']
-        read_only_fields = ['pk', 'created_on']
-
-
-class CommentSerializer(serializers.ModelSerializer):
-    edit = serializers.SerializerMethodField()
-    postrecomment_set = ReCommentSerializer(many=True, read_only=True)
-
-    def get_edit(self, obj):
-        return obj.user == self.context['request'].user
-
-    def create(self, validated_data):
-        return super(CommentSerializer, self).create(validated_data)
-
-    def update(self, instance, validated_data):
-        if self.context['request'].user != instance.user:
-            raise serializers.ValidationError('permission denied')
-        else:
-            try:
-                del validated_data['created_by']
-            except KeyError:
-                pass
-            return super(CommentSerializer, self).update(instance, validated_data)
-
-    class Meta:
-        model = models.PostComment
-        fields = ['comment', 'post', 'created_on', 'user', 'pk', 'edit', 'postrecomment_set']
-        read_only_fields = ['created_on', 'pk', 'edit', 'postrecomment_set']
+        fields = ['file', 'header', 'created_by', 'created_on', 'about', 'team',
+                  'pk', 'action', 'edit', 'comments', 'like', 'unlike']
+        read_only_fields = ['created_on', 'pk', 'comments', 'like', 'unlike', 'action']
 
 
 class NotificationSerializer(serializers.ModelSerializer):
