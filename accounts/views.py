@@ -79,9 +79,14 @@ class UserLoginView(LoginView):
         login(request, user)
         context = {}
         if remember_me == 0:
-            context['token'] = AuthToken.objects.create(user=user, expiry=datetime.timedelta(days=7))[1]
+            context['token'] = AuthToken.objects.create(user=user, expires=datetime.timedelta(days=7))
         else:
-            context['token'] = AuthToken.objects.create(user=user, expiry=datetime.timedelta(days=90))[1]
+            context['token'] = AuthToken.objects.create(user=user, expires=datetime.timedelta(days=90))
+
+        # if remember_me == 0:
+        #     context['token'] = AuthToken.objects.create(user=user, expiry=datetime.timedelta(days=7))[1]
+        # else:
+        #     context['token'] = AuthToken.objects.create(user=user, expiry=datetime.timedelta(days=90))[1]
         context['error'] = 0
         context['user_id'] = user.pk
         return Response(context, status=status.HTTP_200_OK)
