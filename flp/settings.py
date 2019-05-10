@@ -25,9 +25,9 @@ SECRET_KEY = '-4lu)fcebw94c38*z&_-9urp+t6l&nhxl0v)skzm_x$#!m4uz@'
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = ['*']
 
-BASE_URL = 'http://127.0.0.1:8000/'
+BASE_URL = 'http://52.14.193.169/'
 FRONTEND_URL = "http://localhost:3000/"
 
 
@@ -59,6 +59,7 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
+    'whitenoise.middleware.WhiteNoiseMiddleware'
 ]
 
 ROOT_URLCONF = 'flp.urls'
@@ -78,6 +79,8 @@ TEMPLATES = [
         },
     },
 ]
+
+STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
 
 WSGI_APPLICATION = 'flp.wsgi.application'
 
