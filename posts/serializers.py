@@ -1,8 +1,5 @@
-import datetime
-
-from django.db import transaction
+from flp.settings import FRONTEND_URL
 from django.db.models import Q
-
 from . import models
 from rest_framework import serializers
 from django.contrib.auth.models import User
@@ -138,12 +135,13 @@ class PostSerializer(serializers.ModelSerializer):
     unlike = serializers.SerializerMethodField()
     comments = serializers.SerializerMethodField()
     action = serializers.SerializerMethodField()
+    link = serializers.SerializerMethodField()
+
+    def get_link(self, obj):
+        return FRONTEND_URL + "group/" + str(obj.team.pk) + "/post/" + str(obj.pk)
 
     def get_action(self, obj):
-        print(self.context['request'].user)
-        print(obj.postaction_set.all())
         elem = obj.postaction_set.all().filter(user=self.context['request'].user)
-        print(elem)
         if elem.exists():
             return elem[0].action
         else:
@@ -197,8 +195,8 @@ class PostSerializer(serializers.ModelSerializer):
     class Meta:
         model = models.Post
         fields = ['file', 'header', 'created_by', 'created_on', 'about', 'team',
-                  'pk', 'action', 'edit', 'comments', 'like', 'unlike']
-        read_only_fields = ['created_on', 'pk', 'comments', 'like', 'unlike', 'action']
+                  'pk', 'action', 'edit', 'comments', 'like', 'unlike', 'link']
+        read_only_fields = ['created_on', 'pk', 'comments', 'like', 'unlike', 'action', 'link']
 
 
 class NotificationSerializer(serializers.ModelSerializer):
@@ -206,5 +204,4 @@ class NotificationSerializer(serializers.ModelSerializer):
     class Meta:
         model = models.Notification
         fields = '__all__'
-        read_only_fields = '__all__'
 

@@ -28,6 +28,7 @@ DEBUG = True
 ALLOWED_HOSTS = []
 
 BASE_URL = 'http://127.0.0.1:8000/'
+FRONTEND_URL = "http://localhost:3000/"
 
 
 
@@ -154,7 +155,7 @@ REST_FRAMEWORK = {
     ),
     'EXCEPTION_HANDLER': 'flp.utils.custom_exception_handler',
     'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',
-    'PAGE_SIZE': 10
+    'PAGE_SIZE': 80
 }
 
 CORS_ORIGIN_WHITELIST = 'localhost:3000',

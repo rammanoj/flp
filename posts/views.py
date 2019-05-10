@@ -14,10 +14,11 @@ from . import serializers
 from . import models
 from accounts import mails
 from rest_framework.generics import CreateAPIView, ListAPIView, RetrieveUpdateDestroyAPIView, DestroyAPIView
+from flp.settings import FRONTEND_URL
+from rest_framework import pagination
 
 
 # Team Views
-
 class TeamCreateView(CreateAPIView):
     serializer_class = serializers.TeamSerializer
     queryset = models.Team.objects.all()
@@ -30,9 +31,18 @@ class TeamCreateView(CreateAPIView):
 
 class TeamListView(ListAPIView):
     serializer_class = serializers.TeamSerializer
+    pagination_class = None
 
     def get_queryset(self):
         return models.Team.objects.filter(user=self.request.user)
+
+    def get(self, request, *args, **kwargs):
+        context = super(TeamListView, self).get(request, *args, **kwargs)
+        data = context.data
+        del context.data
+        context.data = {}
+        context.data['results'] = data
+        return context
 
 
 class TeamRetrieveUpdateDestroyView(RetrieveUpdateDestroyAPIView):
@@ -241,13 +251,12 @@ class PostCreateView(CreateAPIView):
 
         # Add Notification
         text = request.user.username + ' posted ' + context.data['header']
-        link = 'add the link here as the final part'
+        link = FRONTEND_URL + "group/" + str(team.pk) + "/post/" + str(context.data['pk'])
         models.Notification.objects.create(group=team, text=text, link=link)
 
         # Send Mail
         members = team.user.all().exclude(pk=request.user.pk)
         members = list(members.values_list('email', flat=True))
-        print(members)
         if len(members) > 0:
             to_mail = members.pop(0)
             kwargs = {'mail_type': 4, 'bcc': members, 'group': team.name, 'user': request.user.username, 'link': link}
@@ -268,7 +277,7 @@ class PostRetrieveUpdateDeleteView(RetrieveUpdateDestroyAPIView):
 
         # Notification
         text = request.user.username + ' posted ' + context.data['header']
-        link = 'add the link here as the final part'
+        link = FRONTEND_URL + "group/" + str(context.data['team']) + "/post/" + str(context.data['pk'])
         models.Notification.objects.create(group=self.get_object().team, text=text, link=link)
 
         # Mail notify
@@ -292,9 +301,23 @@ class PostRetrieveUpdateDeleteView(RetrieveUpdateDestroyAPIView):
 
 class PostListView(ListAPIView):
     serializer_class = serializers.PostSerializer
+    pagination_class = pagination.PageNumberPagination
+    pagination_class.page_size = 25
 
     def get_queryset(self):
-        return models.Post.objects.filter(team__pk=self.kwargs['pk']).order_by('-created_on')
+        search = self.request.GET.get('search', None)
+        name = self.request.GET.get('name', None)
+        if search is None or name is None:
+            return models.Post.objects.filter(team__pk=self.kwargs['pk']).order_by('-created_on')
+        else:
+            kwargs = {
+                'team__pk': self.kwargs['pk']
+            }
+            if name is 'pk':
+                kwargs['name'] = search
+            else:
+                kwargs[name + '__contains'] = search
+            return models.Post.objects.filter(**kwargs).order_by('-created_on')
 
     def get(self, request, *args, **kwargs):
         if request.user not in get_object_or_404(models.Team, pk=self.kwargs['pk']).user.all():
@@ -314,7 +337,7 @@ class UpdatePostAction(APIView):
 
         try:
             action = request.data['action']
-            pa = models.PostAction.objects.filter(Q(user=request.user), Q(post=post))
+            pa = models.PostAction.objects.filter(Q(user=request.user), Q(post=post)).order_by('-created_on')
             if pa.exists():
                 pa = pa[0]
                 if action == '':
@@ -328,7 +351,7 @@ class UpdatePostAction(APIView):
                 if action == "like":
                     act = "like"
                 text = request.user.username + ' ' + act + ' ' + ' post ' + pa[0].post.header
-                link = 'add the link here as the final part'
+                link = FRONTEND_URL + "group/" + str(pa[0].post.team.pk) + "/post/" + str(pa[0].post.pk)
                 models.Notification.objects.create(group=pa[0].post.team, text=text, link=link)
         except KeyError:
             return Response({'message': 'Fill all details', 'error' :1}, status=status.HTTP_400_BAD_REQUEST)
@@ -347,7 +370,7 @@ class CommentCreateView(CreateAPIView):
         request.data['post'] = post.pk
         context = super(CommentCreateView, self).post(request, *args, **kwargs)
         text = request.user.username + ' commented on post ' + post.header
-        link = 'add the link here as the final part'
+        link = FRONTEND_URL + "group/" + str(post.team.pk) + "/post/" + str(post.pk)
         models.Notification.objects.create(group=post.team, text=text, link=link)
         return context
 

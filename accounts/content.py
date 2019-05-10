@@ -1,5 +1,6 @@
 
 from flp.settings import BASE_URL
+from flp.settings import FRONTEND_URL
 # This file contain all the mail subjects and messages
 
 # Four kinds of mails (presently)
@@ -50,7 +51,7 @@ invite = {}
 invite['subject'] = 'Invite to the Group'
 invite['message'] = []
 invite['message'].append("Hello, <br /> You are been invited to the group ")
-invite['message'].append("If you wish to join the group, <a href=" + BASE_URL + "team/invite")
+invite['message'].append("If you wish to join the group, <a href=" + FRONTEND_URL + "team/invite/")
 invite['message'].append(">Click here</a>, else ignore the mail.")
 
 

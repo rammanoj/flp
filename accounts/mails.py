@@ -42,7 +42,7 @@ def send_mail(service, to_mail, **kwargs):
     elif kwargs['mail_type'] == 3:
         # Invite User to the group
         contents = content.invite['message'][0] + "<b>" + kwargs['team'] + "</b>. " + content.invite['message'][1] + \
-                    "?link=" + kwargs['invitelink'] + content.invite['message'][2]
+                     kwargs['invitelink'] + content.invite['message'][2]
         contents = mail_template(content.invite['subject'], contents)
         message = MIMEText(contents, 'html')
         message['subject'] = content.invite['subject']
@@ -56,7 +56,6 @@ def send_mail(service, to_mail, **kwargs):
         message = MIMEText(contents, 'html')
         message['subject'] = content.new_post['subject']
         message['bcc'] = "".join(i + "," for i in kwargs['bcc'])[:-1]
-        print(message['bcc'])
     elif kwargs['mail_type'] == 5:
         # Update the POST
         contents = content.update_psot['message'][0] + "<b>" + kwargs['post'] + "</b>. " + content.update_psot['message'][1] + \
@@ -69,6 +68,8 @@ def send_mail(service, to_mail, **kwargs):
 
     message['to'] = to_mail
     message['from'] = SEND_MAIL
+
+    print(to_mail)
 
     msg = {'raw': base64.urlsafe_b64encode(message.as_string().encode()).decode()}
 
