@@ -136,6 +136,7 @@ class PostSerializer(serializers.ModelSerializer):
     comments = serializers.SerializerMethodField()
     action = serializers.SerializerMethodField()
     link = serializers.SerializerMethodField()
+    file = serializers.FileField(required=False)
 
     def get_link(self, obj):
         return FRONTEND_URL + "group/" + str(obj.team.pk) + "/post/" + str(obj.pk)

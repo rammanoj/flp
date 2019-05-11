@@ -69,7 +69,7 @@ class InviteLink(models.Model):
 
 class InviteLinkUsers(models.Model):
     link = models.ForeignKey(InviteLink, on_delete=models.CASCADE)
-    user = models.ForeignKey(User, on_delete=models.CASCADE)
+    email = models.EmailField(blank=True, null=True)
 
     def __str__(self):
         return self.link.__str__()

@@ -79,7 +79,7 @@ class TeamAddUser(APIView):
         link = models.InviteLink.objects.filter(link=link)
         if link.exists():
             user = models.InviteLinkUsers.objects.filter(link=link[0])
-            if user.filter(user=request.user).exists():
+            if user.filter(email=request.user.email).exists():
                 return Response({'message': 'Valid Link', 'error': 0})
             else:
                 return Response({'message': 'Invalid Link', 'error': 1}, status=status.HTTP_400_BAD_REQUEST)
@@ -98,31 +98,33 @@ class TeamAddUser(APIView):
         if request.user not in team.user.all():
             return Response({'message': 'Permission denied', 'error': 1}, status=status.HTTP_400_BAD_REQUEST)
 
-        temp, mails, bcc, to_mail, email, users = 0, [], [], '', '', []
+        temp, bcc, to_mail = 0, [], False
         for i in data:
             try:
                 validate_email(i)
-            except (KeyError, ValidationError) as e:
+                user = models.User.objects.filter(email=i)
+                if user.exists() and user[0] in team.user.all():
+                    pass
+                else:
+                    if temp != 1:
+                        to_mail = i
+                        temp = 1
+                    else:
+                        bcc.append(i)
+            except ValidationError:
                 continue
 
-            check = User.objects.filter(email=i)
-            if check.exists() and check[0] not in team.user.all():
-                users.append(check[0])
-                if temp == 0:
-                    to_mail = i
-                else:
-                    bcc.append(i)
-
-            if temp == 0:
-                temp = 1
+        if to_mail is False and len(bcc) == 0:
+            return Response({'message': 'The users with entered emails are already in the group', 'error': 1},
+                            status=status.HTTP_400_BAD_REQUEST)
 
         # Create a Invite link ot the Invited people.
         hash_code = sha256((str(random.getrandbits(256)) + to_mail).encode('utf-8')).hexdigest()
         link = models.InviteLink.objects.create(team=team, link=hash_code)
-        # Restrict the users to the link.
 
-        for i in users:
-            models.InviteLinkUsers.objects.create(link=link, user=i)
+        models.InviteLinkUsers.objects.create(link=link, email=to_mail)
+        for i in bcc:
+            models.InviteLinkUsers.objects.create(link=link, email=i)
 
         args = []
         kwargs = {
@@ -152,7 +154,7 @@ class TeamAddorRemoveUser(APIView):
                 if not users.exists():
                     link.delete()
                     return Response({'message': 'Link not Found', 'error': 1}, status=status.HTTP_404_NOT_FOUND)
-                user = users.filter(user=request.user)
+                user = users.filter(email=request.user.email)
                 if not user.exists():
                     return Response({'message': 'Link not found', 'error': 1}, status=status.HTTP_400_BAD_REQUEST)
                 if confirm is True:
@@ -250,8 +252,8 @@ class PostCreateView(CreateAPIView):
         context = super(PostCreateView, self).post(request, *args, **kwargs)
 
         # Add Notification
-        text = request.user.username + ' posted ' + context.data['header']
         link = FRONTEND_URL + "group/" + str(team.pk) + "/post/" + str(context.data['pk'])
+        text = request.user.username + ' posted <a href="' + link + '" target="_blank">' + context.data['header'] + '</a>'
         models.Notification.objects.create(group=team, text=text, link=link)
 
         # Send Mail
@@ -276,14 +278,13 @@ class PostRetrieveUpdateDeleteView(RetrieveUpdateDestroyAPIView):
         context = super(PostRetrieveUpdateDeleteView, self).patch(request, *args, **kwargs)
 
         # Notification
-        text = request.user.username + ' posted ' + context.data['header']
         link = FRONTEND_URL + "group/" + str(context.data['team']) + "/post/" + str(context.data['pk'])
+        text = request.user.username + ' updated <a href="' + link + '" target="_blank">' + context.data['header'] + '</a>'
         models.Notification.objects.create(group=self.get_object().team, text=text, link=link)
 
         # Mail notify
         members = self.get_object().team.user.all().exclude(pk=request.user.pk)
         members = list(members.values_list('email', flat=True))
-        print(members)
         if len(members) > 0:
             to_mail = members.pop(0)
             args = []
@@ -350,8 +351,8 @@ class UpdatePostAction(APIView):
                 act = "dislike"
                 if action == "like":
                     act = "like"
-                text = request.user.username + ' ' + act + ' ' + ' post ' + pa[0].post.header
                 link = FRONTEND_URL + "group/" + str(pa[0].post.team.pk) + "/post/" + str(pa[0].post.pk)
+                text = request.user.username + ' ' + act + ' post <a href="' + link + '" target="_blank">' + pa[0].post.header + '</a>'
                 models.Notification.objects.create(group=pa[0].post.team, text=text, link=link)
         except KeyError:
             return Response({'message': 'Fill all details', 'error' :1}, status=status.HTTP_400_BAD_REQUEST)
@@ -369,8 +370,8 @@ class CommentCreateView(CreateAPIView):
         request.data['user'] = request.user.pk
         request.data['post'] = post.pk
         context = super(CommentCreateView, self).post(request, *args, **kwargs)
-        text = request.user.username + ' commented on post ' + post.header
         link = FRONTEND_URL + "group/" + str(post.team.pk) + "/post/" + str(post.pk)
+        text = request.user.username + ' commented on post <a href="' + link + '" target="_blank">' + post.header + '</a>'
         models.Notification.objects.create(group=post.team, text=text, link=link)
         return context
 
@@ -441,7 +442,7 @@ class RecentNotifications(ListAPIView):
     serializer_class = serializers.NotificationSerializer
 
     def get_queryset(self):
-        return models.Notification.objects.filter(group__pk=self.kwargs['pk'])
+        return models.Notification.objects.filter(group__pk=self.kwargs['pk']).order_by('-created_on')
 
 
 class Actionusers(ListAPIView):
