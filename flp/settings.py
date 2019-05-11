@@ -28,7 +28,7 @@ DEBUG = True
 ALLOWED_HOSTS = ['*']
 
 BASE_URL = 'http://127.0.0.1:8000/'
-FRONTEND_URL = "http://localhost:3000/"
+FRONTEND_URL = "http://brandfactoryinc.herokuapp.com/"
 
 
 
@@ -161,7 +161,7 @@ REST_FRAMEWORK = {
     'PAGE_SIZE': 80
 }
 
-CORS_ORIGIN_WHITELIST = ['localhost:3000','localhost:8080', 'http://rammanoj.github.io', 'https://brandfactoryinc.herokuapp.com/']
+CORS_ORIGIN_WHITELIST = ['localhost:3000','localhost:8080', 'http://rammanoj.github.io', 'http://brandfactoryinc.herokuapp.com/']
 
 
 ACCEPT_TYPES = ['jpg', 'png', 'tif', 'gif', 'jpeg', 'bmp', 'psd', 'pdf', 'zip', 'rar', 'tar', '7z']
