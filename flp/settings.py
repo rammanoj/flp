@@ -27,7 +27,7 @@ DEBUG = True
 
 ALLOWED_HOSTS = ['*']
 
-BASE_URL = 'http://127.0.0.1:8000/'
+BASE_URL = 'http://52.14.193.169/'
 FRONTEND_URL = "http://brandfactoryinc.herokuapp.com/"
 
 
@@ -59,7 +59,7 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
-    # 'whitenoise.middleware.WhiteNoiseMiddleware'
+    'whitenoise.middleware.WhiteNoiseMiddleware'
 ]
 
 ROOT_URLCONF = 'flp.urls'
@@ -80,7 +80,7 @@ TEMPLATES = [
     },
 ]
 
-# STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
+STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
 
 WSGI_APPLICATION = 'flp.wsgi.application'
 
@@ -161,7 +161,7 @@ REST_FRAMEWORK = {
     'PAGE_SIZE': 80
 }
 
-CORS_ORIGIN_WHITELIST = ['localhost:3000','localhost:8080', 'http://rammanoj.github.io', 'http://brandfactoryinc.herokuapp.com']
+CORS_ORIGIN_WHITELIST = ['localhost:3000','localhost:8080', 'http://rammanoj.github.io', 'brandfactoryinc.herokuapp.com']
 
 
 ACCEPT_TYPES = ['jpg', 'png', 'tif', 'gif', 'jpeg', 'bmp', 'psd', 'pdf', 'zip', 'rar', 'tar', '7z']
