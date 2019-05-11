@@ -161,7 +161,7 @@ REST_FRAMEWORK = {
     'PAGE_SIZE': 80
 }
 
-CORS_ORIGIN_WHITELIST = ['localhost:3000','localhost:8080', 'http://rammanoj.github.io']
+CORS_ORIGIN_WHITELIST = ['localhost:3000','localhost:8080', 'http://rammanoj.github.io', 'https://brandfactoryinc.herokuapp.com/']
 
 
 ACCEPT_TYPES = ['jpg', 'png', 'tif', 'gif', 'jpeg', 'bmp', 'psd', 'pdf', 'zip', 'rar', 'tar', '7z']
