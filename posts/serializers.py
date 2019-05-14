@@ -149,7 +149,7 @@ class PostSerializer(serializers.ModelSerializer):
             return ""
 
     def get_comments(self, obj):
-        queryset = obj.postcomment_set.all()[:3]
+        queryset = obj.postcomment_set.all().order_by('-created_on')[:3]
         return CommentSerializer(queryset, many=True, context=self.context).data
 
     def to_representation(self, instance):

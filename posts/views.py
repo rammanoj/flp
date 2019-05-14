@@ -317,7 +317,7 @@ class PostListView(ListAPIView):
             if name is 'pk':
                 kwargs['name'] = search
             else:
-                kwargs[name + '__contains'] = search
+                kwargs[name + '__icontains'] = search
             return models.Post.objects.filter(**kwargs).order_by('-created_on')
 
     def get(self, request, *args, **kwargs):
@@ -380,7 +380,7 @@ class CommentListView(ListAPIView):
     serializer_class = serializers.CommentSerializer
 
     def get_queryset(self):
-        return models.PostComment.objects.filter(post__pk=self.kwargs['pk'])
+        return models.PostComment.objects.filter(post__pk=self.kwargs['pk']).order_by('-created_on')
 
     def get(self, request, *args, **kwargs):
         post = get_object_or_404(models.Post, pk=self.kwargs['pk'])

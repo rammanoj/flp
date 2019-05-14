@@ -55,6 +55,9 @@ class PostReComment(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE)
     created_on = models.DateTimeField(default=timezone.now)
 
+    class Meta:
+            ordering = ['-created_on']
+
     def __str__(self):
         return self.comment.__str__()
 
