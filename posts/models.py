@@ -14,22 +14,32 @@ class Team(models.Model):
         return self.name
 
 
+class SubGroup(models.Model):
+    name = models.CharField(max_length=100)
+    team = models.ForeignKey(Team, null=True, on_delete=models.CASCADE)
+    created_on = models.DateTimeField(default=timezone.now)
+    created_by = models.ForeignKey(User, blank=True, null=True, on_delete=models.SET_NULL)
+
+    def __str__(self):
+        return self.name
+
+
 class Post(models.Model):
     header = models.CharField(max_length=50)
     created_by = models.ForeignKey(User, on_delete=models.CASCADE)
     created_on = models.DateTimeField(default=timezone.now)
     about = models.TextField()
-    team = models.ForeignKey(Team, on_delete=models.CASCADE)
+    group = models.ForeignKey(SubGroup, null=True, on_delete=models.CASCADE)
     file = models.FileField(upload_to='uploads/')
 
     def __str__(self):
-        return self.team.__str__() + " -- " + self.header
+        return self.group.__str__() + " -- " + self.header
 
 
 class PostComment(models.Model):
     comment = models.TextField()
     post = models.ForeignKey(Post, on_delete=models.CASCADE)
-    user = models.ForeignKey(User,on_delete=models.CASCADE)
+    user = models.ForeignKey(User, on_delete=models.CASCADE)
     created_on = models.DateTimeField(default=timezone.now)
 
     def __str__(self):

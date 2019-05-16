@@ -13,8 +13,27 @@ class UserSerializer(serializers.ModelSerializer):
         read_only_fields = ['username', 'email', 'pk']
 
 
+class SubGroup(serializers.ModelSerializer):
+
+    def to_representation(self, instance):
+        data = super(SubGroup, self).to_representation(instance)
+        user = User.objects.filter(pk=data['created_by'])
+        if user.exists():
+            data['created_by'] = user[0].username
+        return data
+
+    def create(self, validated_data):
+        return super(SubGroup, self).create(validated_data)
+
+    class Meta:
+        model = models.SubGroup
+        fields = ['pk', 'name', 'team', 'created_on', 'created_by']
+        read_only_fields = ['pk', 'created_on']
+
+
 class TeamSerializer(serializers.ModelSerializer):
     edit = serializers.SerializerMethodField()
+    subgroup_set = SubGroup(many=True, read_only=True)
 
     def to_representation(self, instance):
         data = super(TeamSerializer, self).to_representation(instance)
@@ -34,6 +53,9 @@ class TeamSerializer(serializers.ModelSerializer):
     def create(self, validated_data):
         context = super(TeamSerializer, self).create(validated_data)
         context.user.add(self.context['request'].user)
+
+        # Add a main Subgroup
+        models.SubGroup.objects.create(name='main', team=context, created_by=self.context['request'].user)
         return context
 
     def update(self, instance, validated_data):
@@ -48,8 +70,8 @@ class TeamSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = models.Team
-        fields = ['name', 'about', 'created_by', 'created_on', 'edit', 'pk']
-        read_only_fields = ['pk', 'created_on', 'user']
+        fields = ['name', 'about', 'created_by', 'subgroup_set', 'created_on', 'edit', 'pk']
+        read_only_fields = ['pk', 'created_on', 'user', 'subgroup_set']
 
 
 class PostActionSerializer(serializers.ModelSerializer):
@@ -139,7 +161,9 @@ class PostSerializer(serializers.ModelSerializer):
     file = serializers.FileField(required=False)
 
     def get_link(self, obj):
-        return FRONTEND_URL + "group/" + str(obj.team.pk) + "/post/" + str(obj.pk)
+        print(obj)
+        return "sample"
+        return FRONTEND_URL + "group/" + str(obj.group.team.pk) + "/" + str(obj.group.pk) + "/post/" + str(obj.pk) + "/"
 
     def get_action(self, obj):
         elem = obj.postaction_set.all().filter(user=self.context['request'].user)
@@ -195,7 +219,7 @@ class PostSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = models.Post
-        fields = ['file', 'header', 'created_by', 'created_on', 'about', 'team',
+        fields = ['file', 'header', 'created_by', 'created_on', 'about', 'group',
                   'pk', 'action', 'edit', 'comments', 'like', 'unlike', 'link']
         read_only_fields = ['created_on', 'pk', 'comments', 'like', 'unlike', 'action', 'link']
 

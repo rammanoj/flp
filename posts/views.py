@@ -229,8 +229,62 @@ class TeamUserDeleteView(DestroyAPIView):
             return Response({'message': 'You can not delete yourself from team', 'error': 1}, status=status.HTTP_400_BAD_REQUEST)
         team.user.remove(user)
         return Response({'message': 'Successfully removed', 'error': 0})
-
 # End of Team Views
+
+# Subgroup View
+
+
+class SubGroupCreateView(CreateAPIView):
+    serializer_class = serializers.SubGroup
+
+    def create(self, request, *args, **kwargs):
+        team = models.Team.objects.filter(pk=self.kwargs['pk'])
+        if team.exists():
+            team = team[0]
+            request.data['created_by'] = request.user.pk
+            request.data['team'] = team.pk
+            if request.user in team.user.all():
+                return super(SubGroupCreateView, self).create(request, *args, **kwargs)
+            else:
+                return Response({'message': 'Permission denied', 'error': 1}, status=status.HTTP_400_BAD_REQUEST)
+        else:
+            return Response({'message': 'Team not found', 'error': 1}, status=status.HTTP_400_BAD_REQUEST)
+
+
+class SubGroupRetrieveUpdateDestroyView(RetrieveUpdateDestroyAPIView):
+    serializer_class = serializers.SubGroup
+
+    def get_object(self):
+        return get_object_or_404(models.SubGroup, pk=self.kwargs['pk'])
+
+    def get(self, request, *args, **kwargs):
+        # Check if the user is in the team contained by the subgroup
+        team = self.get_object().team
+        if request.user not in team.user.all():
+            return Response({'message': 'Permission denied', 'error': 1}, status=status.HTTP_400_BAD_REQUEST)
+        return super(SubGroupRetrieveUpdateDestroyView, self).get(request, *args, **kwargs)
+
+    def patch(self, request, *args, **kwargs):
+        # Check if the user is in the team contained by the subgroup
+        team = self.get_object().team
+        if request.user not in team.user.all():
+            return Response({'message': 'Permission denied', 'error': 1}, status=status.HTTP_400_BAD_REQUEST)
+        return super(SubGroupRetrieveUpdateDestroyView, self).patch(request, *args, **kwargs)
+
+    def delete(self, request, *args, **kwargs):
+        # Check if the user is in the team contained by the subgroup
+        team = self.get_object().team
+        if request.user not in team.user.all():
+            return Response({'message': 'Permission denied', 'error': 1}, status=status.HTTP_400_BAD_REQUEST)
+
+        if len(team.subgroup_set.all()) == 1:
+            return Response({'message': 'A group must have atleast one sub-group', 'error': 1},
+                            status=status.HTTP_400_BAD_REQUEST)
+
+        super(SubGroupRetrieveUpdateDestroyView, self).delete(request, *args, **kwargs)
+        return Response({'message': 'Successfully deleted', 'error': 0})
+
+# End of subgroup view
 
 
 class PostCreateView(CreateAPIView):
@@ -239,8 +293,8 @@ class PostCreateView(CreateAPIView):
     
     def post(self, request, *args, **kwargs):
         try:
-            team = get_object_or_404(models.Team, pk=request.data['team'])
-            if request.user not in team.user.all():
+            group = get_object_or_404(models.SubGroup, pk=request.data['group'])
+            if request.user not in group.team.user.all():
                 return Response({'message': 'Permission denied', 'error': 1}, status=status.HTTP_400_BAD_REQUEST)
 
         except KeyError:
@@ -252,16 +306,16 @@ class PostCreateView(CreateAPIView):
         context = super(PostCreateView, self).post(request, *args, **kwargs)
 
         # Add Notification
-        link = FRONTEND_URL + "group/" + str(team.pk) + "/post/" + str(context.data['pk'])
-        text = request.user.username + ' posted <a href="' + link + '" target="_blank">' + context.data['header'] + '</a>'
-        models.Notification.objects.create(group=team, text=text, link=link)
+        link = "group/" + str(group.team.pk) + "/" + str(group.pk) + "/post/" + str(context.data['pk']) + "/"
+        text = request.user.username + ' posted ' + context.data['header']
+        models.Notification.objects.create(group=group.team, text=text, link=link)
 
         # Send Mail
-        members = team.user.all().exclude(pk=request.user.pk)
+        members = group.team.user.all().exclude(pk=request.user.pk)
         members = list(members.values_list('email', flat=True))
         if len(members) > 0:
             to_mail = members.pop(0)
-            kwargs = {'mail_type': 4, 'bcc': members, 'group': team.name, 'user': request.user.username, 'link': link}
+            kwargs = {'mail_type': 4, 'bcc': members, 'group': group.team.name, 'user': request.user.username, 'link': link}
             args = []
             mails.main(to_mail=to_mail, *args, **kwargs)
         return context
@@ -278,17 +332,18 @@ class PostRetrieveUpdateDeleteView(RetrieveUpdateDestroyAPIView):
         context = super(PostRetrieveUpdateDeleteView, self).patch(request, *args, **kwargs)
 
         # Notification
-        link = FRONTEND_URL + "group/" + str(context.data['team']) + "/post/" + str(context.data['pk'])
-        text = request.user.username + ' updated <a href="' + link + '" target="_blank">' + context.data['header'] + '</a>'
-        models.Notification.objects.create(group=self.get_object().team, text=text, link=link)
+        link = "group/" + str(self.get_object().group.team.pk) + "/" + str(self.get_object().group.pk) \
+               + "/post/" + str(context.data['pk']) + "/"
+        text = request.user.username + ' updated ' + context.data['header']
+        models.Notification.objects.create(group=self.get_object().group.team, text=text, link=link)
 
         # Mail notify
-        members = self.get_object().team.user.all().exclude(pk=request.user.pk)
+        members = self.get_object().group.team.user.all().exclude(pk=request.user.pk)
         members = list(members.values_list('email', flat=True))
         if len(members) > 0:
             to_mail = members.pop(0)
             args = []
-            kwargs = {'mail_type': 5, 'bcc': members, 'group': self.get_object().team.name,
+            kwargs = {'mail_type': 5, 'bcc': members, 'group': self.get_object().group.team.name,
                                     'user': request.user.username, 'link': link, 'post': self.get_object().header}
             mails.main(to_mail=to_mail, *args, **kwargs)
         return context
@@ -309,10 +364,10 @@ class PostListView(ListAPIView):
         search = self.request.GET.get('search', None)
         name = self.request.GET.get('name', None)
         if search is None or name is None:
-            return models.Post.objects.filter(team__pk=self.kwargs['pk']).order_by('-created_on')
+            return models.Post.objects.filter(group__pk=self.kwargs['pk']).order_by('-created_on')
         else:
             kwargs = {
-                'team__pk': self.kwargs['pk']
+                'group__pk': self.kwargs['pk']
             }
             if name is 'pk':
                 kwargs['name'] = search
@@ -321,7 +376,7 @@ class PostListView(ListAPIView):
             return models.Post.objects.filter(**kwargs).order_by('-created_on')
 
     def get(self, request, *args, **kwargs):
-        if request.user not in get_object_or_404(models.Team, pk=self.kwargs['pk']).user.all():
+        if request.user not in get_object_or_404(models.SubGroup, pk=self.kwargs['pk']).team.user.all():
             return Response({'message': 'Permission denied', 'error': 1}, status=status.HTTP_400_BAD_REQUEST)
 
         context = super(PostListView, self).get(request, *args, **kwargs)
@@ -333,7 +388,7 @@ class UpdatePostAction(APIView):
 
     def post(self, request, *args, **kwargs):
         post = get_object_or_404(models.Post, pk=self.kwargs['pk'])
-        if request.user not in post.team.user.all():
+        if request.user not in post.group.team.user.all():
             return Response({'message': 'permission denied', 'error': 1}, status=status.HTTP_400_BAD_REQUEST)
 
         try:
@@ -351,9 +406,9 @@ class UpdatePostAction(APIView):
                 act = "dislike"
                 if action == "like":
                     act = "like"
-                link = FRONTEND_URL + "group/" + str(pa[0].post.team.pk) + "/post/" + str(pa[0].post.pk)
-                text = request.user.username + ' ' + act + ' post <a href="' + link + '" target="_blank">' + pa[0].post.header + '</a>'
-                models.Notification.objects.create(group=pa[0].post.team, text=text, link=link)
+                link = "group/" + str(pa[0].post.group.team.pk) + "/" + str(pa[0].post.group.pk) + "/post/" + str(pa[0].post.pk)
+                text = request.user.username + ' ' + act + ' post ' + pa[0].post.header
+                models.Notification.objects.create(group=pa[0].post.group.team, text=text, link=link)
         except KeyError:
             return Response({'message': 'Fill all details', 'error' :1}, status=status.HTTP_400_BAD_REQUEST)
         return Response({'error': 0})
@@ -365,14 +420,14 @@ class CommentCreateView(CreateAPIView):
 
     def post(self, request, *args, **kwargs):
         post = get_object_or_404(models.Post, pk=self.kwargs['pk'])
-        if request.user not in post.team.user.all():
+        if request.user not in post.group.team.user.all():
             return Response({'message': 'Permission denied', 'error': 1}, status=status.HTTP_400_BAD_REQUEST)
         request.data['user'] = request.user.pk
         request.data['post'] = post.pk
         context = super(CommentCreateView, self).post(request, *args, **kwargs)
-        link = FRONTEND_URL + "group/" + str(post.team.pk) + "/post/" + str(post.pk)
-        text = request.user.username + ' commented on post <a href="' + link + '" target="_blank">' + post.header + '</a>'
-        models.Notification.objects.create(group=post.team, text=text, link=link)
+        link = "group/" + str(post.group.team.pk) + "/" + str(post.group.pk) + "/post/" + str(post.pk)
+        text = request.user.username + ' commented on post ' + post.header
+        models.Notification.objects.create(group=post.group.team, text=text, link=link)
         return context
 
 
@@ -384,7 +439,7 @@ class CommentListView(ListAPIView):
 
     def get(self, request, *args, **kwargs):
         post = get_object_or_404(models.Post, pk=self.kwargs['pk'])
-        if request.user not in post.team.user.all():
+        if request.user not in post.group.team.user.all():
             return Response({'message': 'Permission denied', 'error': 1}, status=status.HTTP_400_BAD_REQUEST)
         return super(CommentListView, self).get(request, *args, **kwargs)
 
@@ -414,7 +469,7 @@ class ReCommentCreateView(CreateAPIView):
 
     def post(self, request, *args, **kwargs):
         comment = get_object_or_404(models.PostComment, pk=self.kwargs['pk'])
-        if request.user not in comment.post.team.user.all():
+        if request.user not in comment.post.group.team.user.all():
             return Response({'message': 'Permission denied', 'error': 1}, status=status.HTTP_400_BAD_REQUEST)
         request.data['user'] = request.user.pk
         request.data['comment'] = self.kwargs['pk']

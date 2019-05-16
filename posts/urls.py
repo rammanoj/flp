@@ -11,6 +11,10 @@ urlpatterns = [
     url(r'^user/team/$', views.UserTeamListView.as_view()),
     url(r'^user/team/delete/(?P<pk>\d+)/(?P<user>\d+)/$', views.TeamUserDeleteView.as_view()),
 
+    # Subgroup
+    url(r'^subgroup/create/(?P<pk>\d+)/$', views.SubGroupCreateView.as_view()),
+    url(r'^subgroup/(?P<pk>\d+)/$', views.SubGroupRetrieveUpdateDestroyView.as_view()),
+
     url(r'^post/create/$', views.PostCreateView.as_view()),
     url(r'^posts/(?P<pk>\d+)/$', views.PostListView.as_view()),
     url(r'^post/(?P<pk>\d+)/$', views.PostRetrieveUpdateDeleteView.as_view()),
