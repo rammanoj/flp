@@ -1,3 +1,5 @@
+from django.shortcuts import get_object_or_404
+
 from flp.settings import FRONTEND_URL
 from django.db.models import Q
 from . import models
@@ -151,6 +153,18 @@ class CommentSerializer(serializers.ModelSerializer):
         read_only_fields = ['created_on', 'pk', 'edit', 'postrecomment_set']
 
 
+class TaggedUser(serializers.ModelSerializer):
+
+    def to_representation(self, instance):
+        context = super(TaggedUser, self).to_representation(instance)
+        context['user'] = get_object_or_404(User, pk=context['user']).username
+        return context
+
+    class Meta:
+        model = models.PostTaggedUser
+        fields = ['user']
+
+
 class PostSerializer(serializers.ModelSerializer):
     edit = serializers.SerializerMethodField()
     like = serializers.SerializerMethodField()
@@ -159,10 +173,9 @@ class PostSerializer(serializers.ModelSerializer):
     action = serializers.SerializerMethodField()
     link = serializers.SerializerMethodField()
     file = serializers.FileField(required=False)
+    posttaggeduser_set = TaggedUser(many=True, read_only=True)
 
     def get_link(self, obj):
-        print(obj)
-        return "sample"
         return FRONTEND_URL + "group/" + str(obj.group.team.pk) + "/" + str(obj.group.pk) + "/post/" + str(obj.pk) + "/"
 
     def get_action(self, obj):
@@ -215,13 +228,15 @@ class PostSerializer(serializers.ModelSerializer):
                 del validated_data['created_by']
             except KeyError:
                 pass
-            return super(PostSerializer, self).update(instance, validated_data)
+            context = super(PostSerializer, self).update(instance, validated_data)
+            return context
+
 
     class Meta:
         model = models.Post
         fields = ['file', 'header', 'created_by', 'created_on', 'about', 'group',
-                  'pk', 'action', 'edit', 'comments', 'like', 'unlike', 'link']
-        read_only_fields = ['created_on', 'pk', 'comments', 'like', 'unlike', 'action', 'link']
+                  'pk', 'action', 'edit', 'comments', 'like', 'unlike', 'link', 'posttaggeduser_set']
+        read_only_fields = ['created_on', 'pk', 'comments', 'like', 'unlike', 'action', 'link', 'posttaggeduser_set']
 
 
 class NotificationSerializer(serializers.ModelSerializer):

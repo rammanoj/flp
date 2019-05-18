@@ -300,10 +300,26 @@ class PostCreateView(CreateAPIView):
         except KeyError:
             return Response({'message': "Fill the form completely", 'error': 1}, status=status.HTTP_400_BAD_REQUEST)
 
+        if request.FILES['file'].size > 26214400:
+            return Response({'message': 'Max size is 25MB', 'error': 1}, status=status.HTTP_400_BAD_REQUEST)
         request.data._mutable = True
         request.data['created_by'] = request.user.pk
-        request._mutable = False
+        request.data._mutable = False
         context = super(PostCreateView, self).post(request, *args, **kwargs)
+
+        # Add User tags
+        tags = request.data.getlist('tags[]')
+        return_tags = []
+        with transaction.atomic():
+            for i in tags:
+                user = User.objects.filter(username=i)
+                print(user)
+                print(user.exists() and user[0] in group.team.user.all())
+                if user.exists() and user[0] in group.team.user.all():
+                    models.PostTaggedUser(post=get_object_or_404(models.Post, pk=context.data['pk']), user=user[0]).save()
+                    return_tags.append({'user': user[0].username})
+
+        context.data['posttaggeduser_set'] = return_tags
 
         # Add Notification
         link = "group/" + str(group.team.pk) + "/" + str(group.pk) + "/post/" + str(context.data['pk']) + "/"
@@ -329,7 +345,35 @@ class PostRetrieveUpdateDeleteView(RetrieveUpdateDestroyAPIView):
     def patch(self, request, *args, **kwargs):
         if request.user != self.get_object().created_by:
             return Response({'message': 'Permission denied', 'error': 1}, status=status.HTTP_400_BAD_REQUEST)
+
+        if "file" in request.FILES:
+            if request.FILES['file'].size > 26214400:
+                return Response({'message': 'Max size is 25MB', 'error': 1}, status=status.HTTP_400_BAD_REQUEST)
+
         context = super(PostRetrieveUpdateDeleteView, self).patch(request, *args, **kwargs)
+
+        # Update the Tags, (if updated by the user).
+        tagged = []
+
+        try:
+            content_type = request.META['CONTENT_TYPE'].split(";")[0].lower()
+            if content_type == "application/json":
+                tags = request.data['tags']
+            else:
+                tags = request.data.getlist('tags[]')
+            with transaction.atomic():
+                models.PostTaggedUser.objects.filter(post=self.get_object()).delete()
+                users = self.get_object().group.team.user.all()
+                for i in tags:
+                    user = User.objects.filter(username=i)
+                    print(user.exists() and user[0] in users)
+                    if user.exists() and user[0] in users:
+                        tagged.append({'user': user[0].username})
+                        models.PostTaggedUser(post=self.get_object(), user=user[0]).save()
+
+            context.data['posttaggeduser_set'] = tagged
+        except KeyError:
+            pass
 
         # Notification
         link = "group/" + str(self.get_object().group.team.pk) + "/" + str(self.get_object().group.pk) \

@@ -15,7 +15,6 @@ SCOPES = ['https://www.googleapis.com/auth/gmail.compose', 'https://www.googleap
 
 
 def send_mail(service, to_mail, **kwargs):
-    print(kwargs)
     message = {}
     if kwargs['mail_type'] == 0:
         # user registration
@@ -68,8 +67,6 @@ def send_mail(service, to_mail, **kwargs):
 
     message['to'] = to_mail
     message['from'] = SEND_MAIL
-
-    print(to_mail)
 
     msg = {'raw': base64.urlsafe_b64encode(message.as_string().encode()).decode()}
 
