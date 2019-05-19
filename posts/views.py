@@ -300,8 +300,10 @@ class PostCreateView(CreateAPIView):
         except KeyError:
             return Response({'message': "Fill the form completely", 'error': 1}, status=status.HTTP_400_BAD_REQUEST)
 
-        if request.FILES['file'].size > 26214400:
-            return Response({'message': 'Max size is 25MB', 'error': 1}, status=status.HTTP_400_BAD_REQUEST)
+        if "file" in request.FILES:
+            if request.FILES['file'].size > 26214400:
+                return Response({'message': 'Max size is 25MB', 'error': 1}, status=status.HTTP_400_BAD_REQUEST)
+
         request.data._mutable = True
         request.data['created_by'] = request.user.pk
         request.data._mutable = False
