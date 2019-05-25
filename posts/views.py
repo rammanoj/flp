@@ -14,7 +14,6 @@ from . import serializers
 from . import models
 from accounts import mails
 from rest_framework.generics import CreateAPIView, ListAPIView, RetrieveUpdateDestroyAPIView, DestroyAPIView
-from flp.settings import FRONTEND_URL
 from rest_framework import pagination
 
 
@@ -24,8 +23,10 @@ class TeamCreateView(CreateAPIView):
     queryset = models.Team.objects.all()
 
     def post(self, request, *args, **kwargs):
+        request.data._mutable = True
         request.data['created_by'] = request.user.pk
         request.data['user'] = {}
+        request.data._mutable = False
         return super(TeamCreateView, self).post(request, *args, *kwargs)
 
 

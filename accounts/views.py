@@ -18,6 +18,7 @@ from django.core.exceptions import ValidationError
 from rest_framework.views import APIView
 from accounts import models, serializers, mails
 from knox.models import AuthToken
+from flp.settings import BASE_URL
 
 
 # User Registration
@@ -78,15 +79,15 @@ class UserLoginView(LoginView):
                             status=status.HTTP_400_BAD_REQUEST)
         login(request, user)
         context = {}
-        if remember_me == 0:
-            context['token'] = AuthToken.objects.create(user=user, expires=datetime.timedelta(days=7))
-        else:
-            context['token'] = AuthToken.objects.create(user=user, expires=datetime.timedelta(days=90))
-
         # if remember_me == 0:
-        #     context['token'] = AuthToken.objects.create(user=user, expiry=datetime.timedelta(days=7))[1]
+        #     context['token'] = AuthToken.objects.create(user=user, expires=datetime.timedelta(days=7))
         # else:
-        #     context['token'] = AuthToken.objects.create(user=user, expiry=datetime.timedelta(days=90))[1]
+        #     context['token'] = AuthToken.objects.create(user=user, expires=datetime.timedelta(days=90))
+
+        if remember_me == 0:
+            context['token'] = AuthToken.objects.create(user=user, expiry=datetime.timedelta(days=7))[1]
+        else:
+            context['token'] = AuthToken.objects.create(user=user, expiry=datetime.timedelta(days=90))[1]
         context['error'] = 0
         context['user_id'] = user.pk
         return Response(context, status=status.HTTP_200_OK)
@@ -131,13 +132,10 @@ class UserUpdateView(RetrieveUpdateAPIView):
         return User.objects.filter(pk=self.kwargs['pk'])
 
     def get(self, request, *args, **kwargs):
-        if self.get_object() != request.user:
-            return Response({'message': 'Permission denied', 'error': 1}, status=status.HTTP_400_BAD_REQUEST)
-
-        context = super(UserUpdateView, self).get(request, *args, **kwargs)
-        return context
+        return super(UserUpdateView, self).get(request, *args, **kwargs)
 
     def patch(self, request, *args, **kwargs):
+        print(request.data)
         if self.get_object() != request.user:
             return Response({'message': 'Permission denied', 'error': 1}, status=status.HTTP_400_BAD_REQUEST)
         email_change = 0
@@ -145,9 +143,29 @@ class UserUpdateView(RetrieveUpdateAPIView):
             email = request.data['email']
             try:
                 validate_email(email)
-                email_change = 1
+                if email != request.user.email:
+                    email_change = 1
             except ValidationError:
                 return Response({'message': 'enter a valid data', 'error': 1}, status=status.HTTP_400_BAD_REQUEST)
+        except KeyError:
+            pass
+
+        # Handle Profile change explicitly (as DRF does not handle it presently).
+        try:
+            user_profile = {}
+            try:
+                user_profile['pic'] = request.data['pic']
+            except KeyError:
+                pass
+
+            profile = models.Profile.objects.filter(user=request.user)
+            if profile.exists():
+                if 'pic' in user_profile:
+                    request.user.profile.pic = user_profile['pic']
+
+                request.user.profile.save()
+            else:
+                models.Profile.objects.create(user=request.user, **user_profile)
         except KeyError:
             pass
 

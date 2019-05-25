@@ -31,7 +31,7 @@ line-height: inherit !important;text-decoration: none !important;}.btn-primary t
             </table> \
           </div> \
           <div class="content" style="box-sizing: border-box; display: block; Margin: 0 auto; max-width: 580px; padding: 10px;"> \
-            <span class="preheader" style="color: transparent; display: none; height: 0; max-height: 0; max-width: 0; opacity: 0; overflow: hidden; mso-hide: all; visibility: hidden; width: 0;">This is preheader text. Some clients will show this text as a preview.</span> \
+            <span class="preheader" style="color: transparent; display: none; height: 0; max-height: 0; max-width: 0; opacity: 0; overflow: hidden; mso-hide: all; visibility: hidden; width: 0;"></span> \
             <table role="presentation" class="main" style="border-collapse: separate; mso-table-lspace: 0pt; mso-table-rspace: 0pt; background: #ffffff; border-radius: 3px; width: 100%;" width="100%"> \
               <tr> \
                 <td class="wrapper" style="font-family: sans-serif; font-size: 14px; vertical-align: top; box-sizing: border-box; padding: 20px;" valign="top"> \
@@ -50,8 +50,7 @@ line-height: inherit !important;text-decoration: none !important;}.btn-primary t
               <table role="presentation" border="0" cellpadding="0" cellspacing="0" style="border-collapse: separate; mso-table-lspace: 0pt; mso-table-rspace: 0pt; width: 100%;" width="100%"> \
                 <tr> \
                   <td class="content-block" style="font-family: sans-serif; vertical-align: top; padding-bottom: 10px; padding-top: 10px; color: #9a9ea6; font-size: 12px; text-align: center;" valign="top" align="center"> \
-                    <span class="apple-link" style="color: #9a9ea6; font-size: 12px; text-align: center;">Copyright (c) 2019, BrandFactory Inc. All righs reserved. </span> \
-                    <br> Don\'t like these emails? <a href="https://postdrop.io" style="text-decoration: underline; color: #9a9ea6; font-size: 12px; text-align: center;">Unsubscribe</a>. \
+                    <span class="apple-link" style="color: #9a9ea6; font-size: 12px; text-align: center;">Copyright &copy; 2019, BrandFactory Inc. All righs reserved. </span> \
                   </td> \
                 </tr> \
                 <tr> \

@@ -1,6 +1,6 @@
+from django.core.exceptions import ObjectDoesNotExist
 from django.shortcuts import get_object_or_404
-
-from flp.settings import FRONTEND_URL
+from flp.settings import FRONTEND_URL, BASE_URL
 from django.db.models import Q
 from . import models
 from rest_framework import serializers
@@ -8,11 +8,19 @@ from django.contrib.auth.models import User
 
 
 class UserSerializer(serializers.ModelSerializer):
+    pic = serializers.SerializerMethodField()
+
+    def get_pic(self, obj):
+        try:
+            rv = BASE_URL[:-1] + obj.profile.pic.url
+            return rv
+        except (ObjectDoesNotExist, ValueError):
+            return ""
 
     class Meta:
         model = User
-        fields = ['username', 'email', 'pk']
-        read_only_fields = ['username', 'email', 'pk']
+        fields = ['username', 'pk', 'pic']
+        read_only_fields = ['username', 'pk', 'pic']
 
 
 class SubGroup(serializers.ModelSerializer):
@@ -36,6 +44,7 @@ class SubGroup(serializers.ModelSerializer):
 class TeamSerializer(serializers.ModelSerializer):
     edit = serializers.SerializerMethodField()
     subgroup_set = SubGroup(many=True, read_only=True)
+    pic = serializers.FileField(required=True)
 
     def to_representation(self, instance):
         data = super(TeamSerializer, self).to_representation(instance)
@@ -72,7 +81,7 @@ class TeamSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = models.Team
-        fields = ['name', 'about', 'created_by', 'subgroup_set', 'created_on', 'edit', 'pk']
+        fields = ['name', 'about', 'created_by', 'subgroup_set', 'created_on', 'edit', 'pk', 'pic']
         read_only_fields = ['pk', 'created_on', 'user', 'subgroup_set']
 
 
@@ -90,6 +99,14 @@ class PostActionSerializer(serializers.ModelSerializer):
 
 class ReCommentSerializer(serializers.ModelSerializer):
     edit = serializers.SerializerMethodField()
+    created_by_pic = serializers.SerializerMethodField()
+
+    def get_created_by_pic(self, obj):
+        try:
+            rv = BASE_URL[:-1] + obj.user.profile.pic.url
+            return rv
+        except (ObjectDoesNotExist, ValueError):
+            return ''
 
     def get_edit(self, obj):
         return obj.user == self.context['request'].user
@@ -116,13 +133,21 @@ class ReCommentSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = models.PostReComment
-        fields = ['pk', 're_comment', 'user', 'created_on', 'comment', 'edit']
+        fields = ['pk', 're_comment', 'user', 'created_on', 'comment', 'edit', 'created_by_pic']
         read_only_fields = ['pk', 'created_on']
 
 
 class CommentSerializer(serializers.ModelSerializer):
     edit = serializers.SerializerMethodField()
     postrecomment_set = ReCommentSerializer(many=True, read_only=True)
+    created_by_pic = serializers.SerializerMethodField()
+
+    def get_created_by_pic(self, obj):
+        try:
+            rv = BASE_URL[:-1] + obj.user.profile.pic.url
+            return rv
+        except (ObjectDoesNotExist, ValueError):
+            return ''
 
     def get_edit(self, obj):
         return obj.user == self.context['request'].user
@@ -149,7 +174,7 @@ class CommentSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = models.PostComment
-        fields = ['comment', 'post', 'created_on', 'user', 'pk', 'edit', 'postrecomment_set']
+        fields = ['comment', 'post', 'created_on', 'user', 'pk', 'edit', 'postrecomment_set', 'created_by_pic']
         read_only_fields = ['created_on', 'pk', 'edit', 'postrecomment_set']
 
 
@@ -169,11 +194,18 @@ class PostSerializer(serializers.ModelSerializer):
     edit = serializers.SerializerMethodField()
     like = serializers.SerializerMethodField()
     unlike = serializers.SerializerMethodField()
-    comments = serializers.SerializerMethodField()
     action = serializers.SerializerMethodField()
     link = serializers.SerializerMethodField()
     file = serializers.FileField(required=False)
     posttaggeduser_set = TaggedUser(many=True, read_only=True)
+    created_by_pic = serializers.SerializerMethodField()
+
+    def get_created_by_pic(self, obj):
+        try:
+            rv = BASE_URL[:-1] + obj.created_by.profile.pic.url
+            return rv
+        except (ObjectDoesNotExist, ValueError):
+            return ''
 
     def get_link(self, obj):
         return FRONTEND_URL + "group/" + str(obj.group.team.pk) + "/" + str(obj.group.pk) + "/post/" + str(obj.pk) + "/"
@@ -185,15 +217,11 @@ class PostSerializer(serializers.ModelSerializer):
         else:
             return ""
 
-    def get_comments(self, obj):
-        queryset = obj.postcomment_set.all().order_by('-created_on')[:3]
-        return CommentSerializer(queryset, many=True, context=self.context).data
-
     def to_representation(self, instance):
         data = super(PostSerializer, self).to_representation(instance)
         user = User.objects.filter(pk=data['created_by'])
         if user.exists():
-            data['username'] = user[0].username
+            data['created_by'] = user[0].username
         return data
 
     def get_like(self, obj):
@@ -235,7 +263,7 @@ class PostSerializer(serializers.ModelSerializer):
     class Meta:
         model = models.Post
         fields = ['file', 'header', 'created_by', 'created_on', 'about', 'group',
-                  'pk', 'action', 'edit', 'comments', 'like', 'unlike', 'link', 'posttaggeduser_set']
+                  'pk', 'action', 'edit', 'like', 'unlike', 'link', 'posttaggeduser_set', 'created_by_pic']
         read_only_fields = ['created_on', 'pk', 'comments', 'like', 'unlike', 'action', 'link', 'posttaggeduser_set']
 
 

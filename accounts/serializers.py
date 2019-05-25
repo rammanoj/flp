@@ -8,6 +8,7 @@ from django.utils import timezone
 from rest_framework import serializers
 from rest_framework.exceptions import ValidationError
 from accounts import models, mails
+from flp.settings import BASE_URL
 
 
 def password_check(password):
@@ -84,6 +85,17 @@ class UserSerializer(serializers.ModelSerializer):
 
 
 class UserSettingSerializer(serializers.ModelSerializer):
+    pic = serializers.SerializerMethodField()
+
+    def get_pic(self, obj):
+        if models.Profile.objects.filter(user=obj).exists():
+            print(obj.profile.pic)
+            if obj.profile.pic != "":
+                return BASE_URL[:-1] + obj.profile.pic.url
+            else:
+                return ""
+        else:
+            return ""
 
     def validate_username(self, username):
         if User.objects.filter(username=username).exclude(id=self.instance.id).exists():
@@ -102,6 +114,7 @@ class UserSettingSerializer(serializers.ModelSerializer):
         return email
 
     def update(self, instance, validated_data):
+        print(validated_data)
         # email is changed, send a verification mail
         try:
             if instance.email != validated_data['email']:
@@ -128,7 +141,7 @@ class UserSettingSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = User
-        fields = ('pk', 'username', 'email')
+        fields = ('pk', 'username', 'email', 'pic')
         read_only_fields = ('pk',)
 
 
@@ -152,3 +165,4 @@ class UserPasswordUpdateSerializer(serializers.ModelSerializer):
 class ForgotPasswordUpdateSerailizer(serializers.Serializer):
     password1 = serializers.CharField(write_only=True, required=True)
     password2 = serializers.CharField(write_only=True, required=True)
+

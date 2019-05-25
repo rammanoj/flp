@@ -9,6 +9,7 @@ class Team(models.Model):
     created_by = models.ForeignKey(User, null=True, blank=True, on_delete=models.CASCADE)
     created_on = models.DateTimeField(default=timezone.now)
     user = models.ManyToManyField(User, related_name='team_members')
+    pic = models.FileField(upload_to='group/', blank=True, null=True)
 
     def __str__(self):
         return self.name

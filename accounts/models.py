@@ -17,3 +17,11 @@ class MailVerification(models.Model):
     # 1. 0 --> User registration verification
     # 2. 1 --> User Forgot password
     # 3. 2 --> User email change
+
+
+class Profile(models.Model):
+    user = models.OneToOneField(User, on_delete=models.CASCADE, null=True)
+    pic = models.FileField(upload_to='pics/', blank=True, null=True)
+
+    def __str__(self):
+        return self.user.__str__()
