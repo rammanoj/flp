@@ -17,6 +17,10 @@ from rest_framework.generics import CreateAPIView, ListAPIView, RetrieveUpdateDe
 from rest_framework import pagination
 
 
+class CustomPaginate(pagination.PageNumberPagination):
+    page_size = 25
+
+
 # Team Views
 class TeamCreateView(CreateAPIView):
     serializer_class = serializers.TeamSerializer
@@ -193,28 +197,17 @@ class TeamAddorRemoveUser(APIView):
             return Response({'message': 'Fill all the details', 'error': 1}, status=status.HTTP_400_BAD_REQUEST)
 
 
-class UserTeamListView(ListAPIView):
-    serializer_class = serializers.TeamSerializer
-
-    def get_queryset(self):
-        return models.Team.objects.filter(user=self.request.user)
+class TeamUserPaginate(pagination.PageNumberPagination):
+    page_size = 60
 
 
 class TeamUserListView(ListAPIView):
     serializer_class = serializers.UserSerializer
     queryset = models.User.objects.all()
+    pagination_class = TeamUserPaginate
 
-    def get(self, request, *args, **kwargs):
-        try:
-            team = get_object_or_404(models.Team, pk=self.kwargs['pk'])
-        except KeyError:
-            return Response({'error': 1, 'message': 'Error in fetching details'}, status=status.HTTP_400_BAD_REQUEST)
-
-        if request.user not in team.user.all():
-            return Response({'message': 'Permission Denied', 'error': 1}, status=status.HTTP_400_BAD_REQUEST)
-
-        self.queryset = team.user.all()
-        return super(TeamUserListView, self).get(request, *args, **kwargs)
+    def get_queryset(self):
+        return get_object_or_404(models.Team, pk=self.kwargs['pk']).user.all()
 
 
 class TeamUserDeleteView(DestroyAPIView):
@@ -327,7 +320,7 @@ class PostCreateView(CreateAPIView):
         # Add Notification
         link = "group/" + str(group.team.pk) + "/" + str(group.pk) + "/post/" + str(context.data['pk']) + "/"
         text = request.user.username + ' posted ' + context.data['header']
-        models.Notification.objects.create(group=group.team, text=text, link=link)
+        notification = models.Notification.objects.create(group=group.team, text=text, link=link, post=get_object_or_404(models.Post, pk=context.data['pk']))
 
         # Send Mail
         members = group.team.user.all().exclude(pk=request.user.pk)
@@ -369,7 +362,6 @@ class PostRetrieveUpdateDeleteView(RetrieveUpdateDestroyAPIView):
                 users = self.get_object().group.team.user.all()
                 for i in tags:
                     user = User.objects.filter(username=i)
-                    print(user.exists() and user[0] in users)
                     if user.exists() and user[0] in users:
                         tagged.append({'user': user[0].username})
                         models.PostTaggedUser(post=self.get_object(), user=user[0]).save()
@@ -382,7 +374,7 @@ class PostRetrieveUpdateDeleteView(RetrieveUpdateDestroyAPIView):
         link = "group/" + str(self.get_object().group.team.pk) + "/" + str(self.get_object().group.pk) \
                + "/post/" + str(context.data['pk']) + "/"
         text = request.user.username + ' updated ' + context.data['header']
-        models.Notification.objects.create(group=self.get_object().group.team, text=text, link=link)
+        models.Notification.objects.create(group=self.get_object().group.team, text=text, link=link, post=self.get_object())
 
         # Mail notify
         members = self.get_object().group.team.user.all().exclude(pk=request.user.pk)
@@ -398,14 +390,18 @@ class PostRetrieveUpdateDeleteView(RetrieveUpdateDestroyAPIView):
     def delete(self, request, *args, **kwargs):
         if request.user != self.get_object().created_by:
             return Response({'message': 'Permission denied', 'error': 1}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Delete all the notifications regarding the post.
+        models.Notification.objects.filter(post=self.get_object()).delete()
         super(PostRetrieveUpdateDeleteView, self).delete(request, *args, **kwargs)
+
         return Response({'message': 'Successfully deleted', 'error': 0})
 
 
 class PostListView(ListAPIView):
     serializer_class = serializers.PostSerializer
-    pagination_class = pagination.PageNumberPagination
-    pagination_class.page_size = 25
+    pagination_class = CustomPaginate
+
 
     def get_queryset(self):
         search = self.request.GET.get('search', None)
@@ -455,7 +451,7 @@ class UpdatePostAction(APIView):
                     act = "like"
                 link = "group/" + str(pa[0].post.group.team.pk) + "/" + str(pa[0].post.group.pk) + "/post/" + str(pa[0].post.pk)
                 text = request.user.username + ' ' + act + ' post ' + pa[0].post.header
-                models.Notification.objects.create(group=pa[0].post.group.team, text=text, link=link)
+                models.Notification.objects.create(group=pa[0].post.group.team, text=text, link=link, post=post)
         except KeyError:
             return Response({'message': 'Fill all details', 'error' :1}, status=status.HTTP_400_BAD_REQUEST)
         return Response({'error': 0})
@@ -474,12 +470,13 @@ class CommentCreateView(CreateAPIView):
         context = super(CommentCreateView, self).post(request, *args, **kwargs)
         link = "group/" + str(post.group.team.pk) + "/" + str(post.group.pk) + "/post/" + str(post.pk)
         text = request.user.username + ' commented on post ' + post.header
-        models.Notification.objects.create(group=post.group.team, text=text, link=link)
+        models.Notification.objects.create(group=post.group.team, text=text, link=link, post=post)
         return context
 
 
 class CommentListView(ListAPIView):
     serializer_class = serializers.CommentSerializer
+    pagination_class = CustomPaginate
 
     def get_queryset(self):
         return models.PostComment.objects.filter(post__pk=self.kwargs['pk']).order_by('-created_on')
@@ -542,6 +539,7 @@ class ReCommentRetrieveUpdateDestroyView(RetrieveUpdateDestroyAPIView):
 
 class RecentNotifications(ListAPIView):
     serializer_class = serializers.NotificationSerializer
+    pagination_class = CustomPaginate
 
     def get_queryset(self):
         return models.Notification.objects.filter(group__pk=self.kwargs['pk']).order_by('-created_on')

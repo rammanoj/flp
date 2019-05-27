@@ -152,20 +152,12 @@ class UserUpdateView(RetrieveUpdateAPIView):
 
         # Handle Profile change explicitly (as DRF does not handle it presently).
         try:
-            user_profile = {}
-            try:
-                user_profile['pic'] = request.data['pic']
-            except KeyError:
-                pass
-
             profile = models.Profile.objects.filter(user=request.user)
             if profile.exists():
-                if 'pic' in user_profile:
-                    request.user.profile.pic = user_profile['pic']
-
+                request.user.profile.pic = request.data['pic']
                 request.user.profile.save()
             else:
-                models.Profile.objects.create(user=request.user, **user_profile)
+                models.Profile.objects.create(user=request.user, pic=request.data['pic'])
         except KeyError:
             pass
 

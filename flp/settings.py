@@ -157,14 +157,11 @@ REST_FRAMEWORK = {
         'rest_framework.renderers.JSONRenderer',
     ),
     'EXCEPTION_HANDLER': 'flp.utils.custom_exception_handler',
-    'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',
-    'PAGE_SIZE': 80
 }
 
-CORS_ORIGIN_WHITELIST = ['localhost:3000','localhost:8080', 'http://rammanoj.github.io', 'brandfactoryinc.herokuapp.com']
+CORS_ORIGIN_WHITELIST = ['localhost:3000', 'localhost:8080', 'rammanoj.github.io', 'brandfactoryinc.herokuapp.com']
 
 
 ACCEPT_TYPES = ['jpg', 'png', 'tif', 'gif', 'jpeg', 'bmp', 'psd', 'pdf', 'zip', 'rar', 'tar', '7z']
 MAX_UPLOAD_SIZE = '20971520'
-
 

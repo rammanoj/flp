@@ -105,6 +105,7 @@ class Notification(models.Model):
     created_on = models.DateTimeField(default=timezone.now)
     text = models.CharField(max_length=250)
     link = models.CharField(max_length=300, null=True, blank=True)
+    post = models.ForeignKey(Post, on_delete=models.CASCADE, null=True)
 
     def __str__(self):
         return self.group.__str__() + " -- " + self.text
