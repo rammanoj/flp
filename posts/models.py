@@ -31,10 +31,18 @@ class Post(models.Model):
     created_on = models.DateTimeField(default=timezone.now)
     about = models.TextField()
     group = models.ForeignKey(SubGroup, null=True, on_delete=models.CASCADE)
-    file = models.FileField(upload_to='uploads/')
+    uploading = models.BooleanField(default=True)
 
     def __str__(self):
         return self.group.__str__() + " -- " + self.header
+
+
+class PostFile(models.Model):
+    post = models.ForeignKey(Post, on_delete=models.CASCADE, blank=True,  null=True)
+    file = models.FileField(upload_to='uploads/', blank=True, null=True)
+
+    def __str__(self):
+        return self.post.__str__()
 
 
 class PostTaggedUser(models.Model):
@@ -50,7 +58,7 @@ class PostTaggedUser(models.Model):
 
 class PostComment(models.Model):
     comment = models.TextField()
-    post = models.ForeignKey(Post, on_delete=models.CASCADE)
+    post = models.ForeignKey(PostFile, on_delete=models.CASCADE)
     user = models.ForeignKey(User, on_delete=models.CASCADE)
     created_on = models.DateTimeField(default=timezone.now)
 
@@ -109,5 +117,4 @@ class Notification(models.Model):
 
     def __str__(self):
         return self.group.__str__() + " -- " + self.text
-
 

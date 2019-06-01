@@ -44,7 +44,7 @@ class SubGroup(serializers.ModelSerializer):
 class TeamSerializer(serializers.ModelSerializer):
     edit = serializers.SerializerMethodField()
     subgroup_set = SubGroup(many=True, read_only=True)
-    pic = serializers.FileField(required=True)
+    pic = serializers.FileField(required=False)
 
     def to_representation(self, instance):
         data = super(TeamSerializer, self).to_representation(instance)
@@ -190,15 +190,26 @@ class TaggedUser(serializers.ModelSerializer):
         fields = ['user']
 
 
+class PostFile(serializers.ModelSerializer):
+
+    def to_representation(self, instance):
+        context = super(PostFile, self).to_representation(instance)
+        context['file'] = BASE_URL + instance.file.url
+        return context
+
+    class Meta:
+        model = models.PostFile
+        fields = ['pk', 'file']
+
+
 class PostSerializer(serializers.ModelSerializer):
     edit = serializers.SerializerMethodField()
     like = serializers.SerializerMethodField()
-    unlike = serializers.SerializerMethodField()
     action = serializers.SerializerMethodField()
     link = serializers.SerializerMethodField()
-    file = serializers.FileField(required=False)
     posttaggeduser_set = TaggedUser(many=True, read_only=True)
     created_by_pic = serializers.SerializerMethodField()
+    postfile_set = PostFile(many=True, read_only=True)
 
     def get_created_by_pic(self, obj):
         try:
@@ -226,9 +237,6 @@ class PostSerializer(serializers.ModelSerializer):
 
     def get_like(self, obj):
         return len(models.PostAction.objects.filter(Q(post=obj), Q(action="like")))
-
-    def get_unlike(self, obj):
-        return len(models.PostAction.objects.filter(Q(post=obj), Q(action="unlike")))
 
     def get_edit(self, obj):
         return obj.created_by == self.context['request'].user
@@ -262,9 +270,9 @@ class PostSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = models.Post
-        fields = ['file', 'header', 'created_by', 'created_on', 'about', 'group',
-                  'pk', 'action', 'edit', 'like', 'unlike', 'link', 'posttaggeduser_set', 'created_by_pic']
-        read_only_fields = ['created_on', 'pk', 'comments', 'like', 'unlike', 'action', 'link', 'posttaggeduser_set']
+        fields = ['header', 'created_by', 'created_on', 'about', 'group',
+                  'pk', 'action', 'edit', 'like', 'link', 'posttaggeduser_set', 'created_by_pic', 'postfile_set']
+        read_only_fields = ['created_on', 'pk', 'comments', 'like', 'action', 'link', 'posttaggeduser_set', 'postfile_set']
 
 
 class NotificationSerializer(serializers.ModelSerializer):

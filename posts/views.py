@@ -1,7 +1,9 @@
 import random
 from _sha256 import sha256
+from django.utils import timezone
+from datetime import timedelta
 from django.contrib.auth.models import User
-from django.core.exceptions import ValidationError
+from django.core.exceptions import ValidationError, ObjectDoesNotExist
 from django.core.validators import validate_email
 from django.db import transaction
 from django.db.models import Q
@@ -281,62 +283,133 @@ class SubGroupRetrieveUpdateDestroyView(RetrieveUpdateDestroyAPIView):
 # End of subgroup view
 
 
+def postCreateResponse(data, user, post, request):
+    # Add user tags.
+    return_tags = []
+    tagging = ' and tagged '
+    with transaction.atomic():
+        if "tags[]" in data:
+            tags = data.getlist('tags[]')
+            for i in tags:
+                users = User.objects.filter(username=i)
+                if users.exists() and users[0] in post.group.team.user.all():
+                    models.PostTaggedUser(post=post, user=users[0]).save()
+                    tagging += users[0].username + ', '
+                    return_tags.append({'user': users[0].username})
+
+        # Add Notification
+        link = "group/" + str(post.group.team.pk) + "/" + str(post.group.pk) + "/post/" + str(
+            post.pk) + "/"
+        text = user.username + ' posted ' + post.header
+        if tagging is not ' and tagged ':
+            tagging = tagging[:-2] + ' in it.'
+            text += tagging
+        models.Notification.objects.create(group=post.group.team, text=text, link=link, post=post)
+
+    # Send mail about the post to all team members.
+    members = post.group.team.user.all().exclude(pk=user.pk)
+    members = list(members.values_list('email', flat=True))
+    if len(members) > 0:
+        to_mail = members.pop(0)
+        kwargs = {'mail_type': 4, 'bcc': members, 'group': post.group.team.name,
+                  'user': user.username, 'link': link}
+        args = []
+        mails.main(to_mail=to_mail, *args, **kwargs)
+
+    serialized_post = serializers.PostSerializer(models.Post.objects.filter(pk=post.pk), many=True,
+                                                 context={'request': request})
+
+    return Response(serialized_post.data[0])
+
+
 class PostCreateView(CreateAPIView):
     serializer_class = serializers.PostSerializer
     queryset = models.Post.objects.all()
     
     def post(self, request, *args, **kwargs):
+        data = request.data.copy()
+
         try:
-            group = get_object_or_404(models.SubGroup, pk=request.data['group'])
-            if request.user not in group.team.user.all():
-                return Response({'message': 'Permission denied', 'error': 1}, status=status.HTTP_400_BAD_REQUEST)
+            if int(data['number']) is 2 and "group" in data and "file" not in data:
+                with transaction.atomic():
+                    group = get_object_or_404(models.SubGroup, pk=data['group'])
+                    if "about" not in data:
+                        data['about'] = ""
+                    post = models.Post.objects.create(header=data['header'], about=data['about'],
+                                                      created_by=request.user,
+                                                      group=group, uploading=False)
+                return postCreateResponse(data, request.user, post, request)
+
+            if int(data['number']) is 2 and "group" in data:
+                if "file" in request.FILES:
+                    if request.FILES['file'].size > 26214400:
+                        return Response({'message': 'Max size is 25MB', 'error': 1}, status=status.HTTP_400_BAD_REQUEST)
+
+                with transaction.atomic():
+                    group = get_object_or_404(models.SubGroup, pk=data['group'])
+                    if "about" not in data:
+                        data['about'] = ""
+                    post = models.Post.objects.create(header=data['header'], about=data['about'],
+                                                      created_by=request.user,
+                                                      group=group, uploading=False)
+                    models.PostFile.objects.create(post=post, file=data['file'])
+                return postCreateResponse(data, request.user, post, request)
+
+            if int(data['number']) is 0:
+                # Check if there are any aborted posts.
+                query = models.Post.objects.filter(Q(created_on__lte=(timezone.now() - timedelta(days=1))),
+                                                   Q(uploading=True))
+                if query.exists():
+                    query.delete()
+                # Request is coming for the first time, create the post.
+                group = get_object_or_404(models.SubGroup, pk=data['group'])
+                if request.user not in group.team.user.all():
+                    return Response({'message': 'Permission denied', 'error': 1}, status=status.HTTP_400_BAD_REQUEST)
+                if "file" in request.FILES:
+                    if request.FILES['file'].size > 26214400:
+                        return Response({'message': 'Max size is 25MB', 'error': 1}, status=status.HTTP_400_BAD_REQUEST)
+                if "about" not in data:
+                    data['about'] = ""
+                post = models.Post.objects.create(header=data['header'], about=data['about'], created_by=request.user,
+                                                  group=group)
+                models.PostFile.objects.create(post=post, file=data['file'])
+                return Response({'post': post.pk})
+            else:
+                post = get_object_or_404(models.Post, pk=data['post'])
+                if len(models.PostFile.objects.filter(post=post)) > 8:
+                    post.delete()
+                    return Response({'message': 'A post can have maximum of 8 files.'})
+
+                if "file" in request.FILES:
+                    if request.FILES['file'].size > 26214400:
+                        post.delete()
+                        return Response({'message': 'Max size is 25MB', 'error': 1}, status=status.HTTP_400_BAD_REQUEST)
+
+                    models.PostFile.objects.create(post=post, file=data['file'])
+                    if int(data['number']) is 2:
+                        # uploading is completed.
+                        with transaction.atomic():
+                            post.uploading = False
+                            post.save()
+                        return postCreateResponse(data, request.user, post, request)
+                    else:
+                        return Response({'post': post.pk})
 
         except KeyError:
-            return Response({'message': "Fill the form completely", 'error': 1}, status=status.HTTP_400_BAD_REQUEST)
-
-        if "file" in request.FILES:
-            if request.FILES['file'].size > 26214400:
-                return Response({'message': 'Max size is 25MB', 'error': 1}, status=status.HTTP_400_BAD_REQUEST)
-
-        request.data._mutable = True
-        request.data['created_by'] = request.user.pk
-        request.data._mutable = False
-        context = super(PostCreateView, self).post(request, *args, **kwargs)
-
-        # Add User tags
-        tags = request.data.getlist('tags[]')
-        return_tags = []
-        with transaction.atomic():
-            for i in tags:
-                user = User.objects.filter(username=i)
-                print(user)
-                print(user.exists() and user[0] in group.team.user.all())
-                if user.exists() and user[0] in group.team.user.all():
-                    models.PostTaggedUser(post=get_object_or_404(models.Post, pk=context.data['pk']), user=user[0]).save()
-                    return_tags.append({'user': user[0].username})
-
-        context.data['posttaggeduser_set'] = return_tags
-
-        # Add Notification
-        link = "group/" + str(group.team.pk) + "/" + str(group.pk) + "/post/" + str(context.data['pk']) + "/"
-        text = request.user.username + ' posted ' + context.data['header']
-        notification = models.Notification.objects.create(group=group.team, text=text, link=link, post=get_object_or_404(models.Post, pk=context.data['pk']))
-
-        # Send Mail
-        members = group.team.user.all().exclude(pk=request.user.pk)
-        members = list(members.values_list('email', flat=True))
-        if len(members) > 0:
-            to_mail = members.pop(0)
-            kwargs = {'mail_type': 4, 'bcc': members, 'group': group.team.name, 'user': request.user.username, 'link': link}
-            args = []
-            mails.main(to_mail=to_mail, *args, **kwargs)
-        return context
+            return Response({'message': 'Fill the form completely', 'error': 1}, status=status.HTTP_400_BAD_REQUEST)
 
 
 class PostRetrieveUpdateDeleteView(RetrieveUpdateDestroyAPIView):
     serializer_class = serializers.PostSerializer
     queryset = models.Post.objects.all()
     http_method_names = ['patch', 'delete']
+
+    def get_object(self):
+        obj = get_object_or_404(models.Post, pk=self.kwargs['pk'])
+        if obj.uploading:
+            return get_object_or_404(models.Post, pk=-1)
+        else:
+            return obj
 
     def patch(self, request, *args, **kwargs):
         if request.user != self.get_object().created_by:
@@ -392,7 +465,6 @@ class PostRetrieveUpdateDeleteView(RetrieveUpdateDestroyAPIView):
             return Response({'message': 'Permission denied', 'error': 1}, status=status.HTTP_400_BAD_REQUEST)
 
         # Delete all the notifications regarding the post.
-        models.Notification.objects.filter(post=self.get_object()).delete()
         super(PostRetrieveUpdateDeleteView, self).delete(request, *args, **kwargs)
 
         return Response({'message': 'Successfully deleted', 'error': 0})
@@ -407,10 +479,11 @@ class PostListView(ListAPIView):
         search = self.request.GET.get('search', None)
         name = self.request.GET.get('name', None)
         if search is None or name is None:
-            return models.Post.objects.filter(group__pk=self.kwargs['pk']).order_by('-created_on')
+            return models.Post.objects.filter(Q(group__pk=self.kwargs['pk']), Q(uploading=False)).order_by('-created_on')
         else:
             kwargs = {
-                'group__pk': self.kwargs['pk']
+                'group__pk': self.kwargs['pk'],
+                'uploading': False
             }
             if name is 'pk':
                 kwargs['name'] = search
@@ -462,15 +535,16 @@ class CommentCreateView(CreateAPIView):
     queryset = models.Post.objects.all()
 
     def post(self, request, *args, **kwargs):
-        post = get_object_or_404(models.Post, pk=self.kwargs['pk'])
-        if request.user not in post.group.team.user.all():
+        post_file = get_object_or_404(models.PostFile, pk=self.kwargs['pk'])
+        if request.user not in post_file.post.group.team.user.all():
             return Response({'message': 'Permission denied', 'error': 1}, status=status.HTTP_400_BAD_REQUEST)
         request.data['user'] = request.user.pk
-        request.data['post'] = post.pk
+        request.data['post'] = post_file.pk
         context = super(CommentCreateView, self).post(request, *args, **kwargs)
-        link = "group/" + str(post.group.team.pk) + "/" + str(post.group.pk) + "/post/" + str(post.pk)
-        text = request.user.username + ' commented on post ' + post.header
-        models.Notification.objects.create(group=post.group.team, text=text, link=link, post=post)
+        link = "group/" + str(post_file.post.group.team.pk) + "/" + str(post_file.post.group.pk) + \
+               "/post/" + str(post_file.post.pk)
+        text = request.user.username + ' commented on post ' + post_file.post.header
+        models.Notification.objects.create(group=post_file.post.group.team, text=text, link=link, post=post_file.post)
         return context
 
 
@@ -482,8 +556,8 @@ class CommentListView(ListAPIView):
         return models.PostComment.objects.filter(post__pk=self.kwargs['pk']).order_by('-created_on')
 
     def get(self, request, *args, **kwargs):
-        post = get_object_or_404(models.Post, pk=self.kwargs['pk'])
-        if request.user not in post.group.team.user.all():
+        post_file = get_object_or_404(models.PostFile, pk=self.kwargs['pk'])
+        if request.user not in post_file.post.group.team.user.all():
             return Response({'message': 'Permission denied', 'error': 1}, status=status.HTTP_400_BAD_REQUEST)
         return super(CommentListView, self).get(request, *args, **kwargs)
 

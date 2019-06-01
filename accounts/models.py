@@ -1,5 +1,6 @@
 from django.db import models
 from django.contrib.auth.models import User
+from flp.settings import BASE_URL
 
 
 class MailVerification(models.Model):
