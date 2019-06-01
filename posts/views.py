@@ -399,6 +399,33 @@ class PostCreateView(CreateAPIView):
             return Response({'message': 'Fill the form completely', 'error': 1}, status=status.HTTP_400_BAD_REQUEST)
 
 
+def postupdateResponse(request, post, type):
+    # Remove the files chosed to be removed.
+    if "remove_files" in request.data:
+        files = list(map(int, request.data['remove_files'].split(",")))
+        print(files)
+        models.PostFile.objects.filter(pk__in=files).delete()
+
+    # Update the tags.
+    if "tags[]" in request.data:
+        tagged = []
+        tags = request.data.getlist('tags[]')
+        with transaction.atomic():
+            models.PostTaggedUser.objects.filter(post=post).delete()
+            users = post.group.team.user.all()
+            for i in tags:
+                print("came to the upadte response")
+                user = User.objects.filter(username=i)
+                if user.exists() and user[0] in users:
+                    tagged.append({'user': user[0].username})
+                    models.PostTaggedUser(post=post, user=user[0]).save()
+    if type is 0:
+        return Response(serializers.PostSerializer(models.Post.objects.filter(pk=post.pk),
+                                                   many=True, context={'request': request}).data[0])
+    else:
+        return Response({'pk': post.pk})
+
+
 class PostRetrieveUpdateDeleteView(RetrieveUpdateDestroyAPIView):
     serializer_class = serializers.PostSerializer
     queryset = models.Post.objects.all()
@@ -418,47 +445,25 @@ class PostRetrieveUpdateDeleteView(RetrieveUpdateDestroyAPIView):
         if "file" in request.FILES:
             if request.FILES['file'].size > 26214400:
                 return Response({'message': 'Max size is 25MB', 'error': 1}, status=status.HTTP_400_BAD_REQUEST)
-
-        context = super(PostRetrieveUpdateDeleteView, self).patch(request, *args, **kwargs)
-
-        # Update the Tags, (if updated by the user).
-        tagged = []
-
         try:
-            content_type = request.META['CONTENT_TYPE'].split(";")[0].lower()
-            if content_type == "application/json":
-                tags = request.data['tags']
+            if int(request.data['number']) is 0:
+                if "file" in request.FILES:
+                    models.PostFile.objects.create(post=self.get_object(), file=request.data['file'])
+
+                super(PostRetrieveUpdateDeleteView, self).patch(request, *args, **kwargs)
+                return postupdateResponse(request, self.get_object(), 0)
+
+            elif int(request.data['number']) is 1:
+                models.PostFile.objects.create(post=self.get_object(), file=request.data['file'])
+                return postupdateResponse(request, self.get_object(), 1)
+
             else:
-                tags = request.data.getlist('tags[]')
-            with transaction.atomic():
-                models.PostTaggedUser.objects.filter(post=self.get_object()).delete()
-                users = self.get_object().group.team.user.all()
-                for i in tags:
-                    user = User.objects.filter(username=i)
-                    if user.exists() and user[0] in users:
-                        tagged.append({'user': user[0].username})
-                        models.PostTaggedUser(post=self.get_object(), user=user[0]).save()
+                models.PostFile.objects.create(post=self.get_object(), file=request.data['file'])
+                return Response(serializers.PostSerializer(models.Post.objects.filter(pk=self.kwargs['pk']),
+                                                   many=True, context={'request': request}).data[0])
 
-            context.data['posttaggeduser_set'] = tagged
         except KeyError:
-            pass
-
-        # Notification
-        link = "group/" + str(self.get_object().group.team.pk) + "/" + str(self.get_object().group.pk) \
-               + "/post/" + str(context.data['pk']) + "/"
-        text = request.user.username + ' updated ' + context.data['header']
-        models.Notification.objects.create(group=self.get_object().group.team, text=text, link=link, post=self.get_object())
-
-        # Mail notify
-        members = self.get_object().group.team.user.all().exclude(pk=request.user.pk)
-        members = list(members.values_list('email', flat=True))
-        if len(members) > 0:
-            to_mail = members.pop(0)
-            args = []
-            kwargs = {'mail_type': 5, 'bcc': members, 'group': self.get_object().group.team.name,
-                                    'user': request.user.username, 'link': link, 'post': self.get_object().header}
-            mails.main(to_mail=to_mail, *args, **kwargs)
-        return context
+            return Response({'message': 'Fill the form completely!', 'error': 1}, status=status.HTTP_400_BAD_REQUEST)
 
     def delete(self, request, *args, **kwargs):
         if request.user != self.get_object().created_by:
