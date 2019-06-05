@@ -12,3 +12,4 @@ admin.site.register(models.Notification)
 admin.site.register(models.SubGroup)
 admin.site.register(models.PostTaggedUser)
 admin.site.register(models.PostFile)
+

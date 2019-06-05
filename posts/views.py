@@ -327,12 +327,14 @@ class PostCreateView(CreateAPIView):
     queryset = models.Post.objects.all()
     
     def post(self, request, *args, **kwargs):
-        data = request.data.copy()
+        data = request.data
 
         try:
             if int(data['number']) is 2 and "group" in data and "file" not in data:
                 with transaction.atomic():
                     group = get_object_or_404(models.SubGroup, pk=data['group'])
+                    if data['header'] == "":
+                        return Response({'message': 'Fill form completely', 'error': 1}, status=status.HTTP_400_BAD_REQUEST)
                     if "about" not in data:
                         data['about'] = ""
                     post = models.Post.objects.create(header=data['header'], about=data['about'],
@@ -341,7 +343,12 @@ class PostCreateView(CreateAPIView):
                 return postCreateResponse(data, request.user, post, request)
 
             if int(data['number']) is 2 and "group" in data:
+
+                if data['header'] == "":
+                    return Response({'message': 'Fill form completely', 'error': 1}, status=status.HTTP_400_BAD_REQUEST)
+
                 if "file" in request.FILES:
+                    print("came here")
                     if request.FILES['file'].size > 26214400:
                         return Response({'message': 'Max size is 25MB', 'error': 1}, status=status.HTTP_400_BAD_REQUEST)
 
@@ -363,6 +370,10 @@ class PostCreateView(CreateAPIView):
                     query.delete()
                 # Request is coming for the first time, create the post.
                 group = get_object_or_404(models.SubGroup, pk=data['group'])
+
+                if data['header'] == "":
+                    return Response({'message': 'Fill form completely', 'error': 1}, status=status.HTTP_400_BAD_REQUEST)
+
                 if request.user not in group.team.user.all():
                     return Response({'message': 'Permission denied', 'error': 1}, status=status.HTTP_400_BAD_REQUEST)
                 if "file" in request.FILES:
@@ -373,7 +384,7 @@ class PostCreateView(CreateAPIView):
                 post = models.Post.objects.create(header=data['header'], about=data['about'], created_by=request.user,
                                                   group=group)
                 models.PostFile.objects.create(post=post, file=data['file'])
-                return Response({'post': post.pk})
+                return Response({'message': post.pk, 'error': 0})
             else:
                 post = get_object_or_404(models.Post, pk=data['post'])
                 if len(models.PostFile.objects.filter(post=post)) > 8:
@@ -386,14 +397,14 @@ class PostCreateView(CreateAPIView):
                         return Response({'message': 'Max size is 25MB', 'error': 1}, status=status.HTTP_400_BAD_REQUEST)
 
                     models.PostFile.objects.create(post=post, file=data['file'])
-                    if int(data['number']) is 2:
-                        # uploading is completed.
-                        with transaction.atomic():
-                            post.uploading = False
-                            post.save()
-                        return postCreateResponse(data, request.user, post, request)
-                    else:
-                        return Response({'post': post.pk})
+
+                if int(data['number']) is 2:
+                    # uploading is completed.
+                    post.uploading = False
+                    post.save()
+                    return postCreateResponse(data, request.user, post, request)
+                else:
+                    return Response({'message': post.pk, 'error': 0})
 
         except KeyError:
             return Response({'message': 'Fill the form completely', 'error': 1}, status=status.HTTP_400_BAD_REQUEST)
@@ -401,9 +412,8 @@ class PostCreateView(CreateAPIView):
 
 def postupdateResponse(request, post, type):
     # Remove the files chosed to be removed.
-    if "remove_files" in request.data:
-        files = list(map(int, request.data['remove_files'].split(",")))
-        print(files)
+    if "remove_file" in request.data:
+        files = list(map(int, request.data['remove_file'].split(",")))
         models.PostFile.objects.filter(pk__in=files).delete()
 
     # Update the tags.
@@ -414,7 +424,6 @@ def postupdateResponse(request, post, type):
             models.PostTaggedUser.objects.filter(post=post).delete()
             users = post.group.team.user.all()
             for i in tags:
-                print("came to the upadte response")
                 user = User.objects.filter(username=i)
                 if user.exists() and user[0] in users:
                     tagged.append({'user': user[0].username})
@@ -423,7 +432,7 @@ def postupdateResponse(request, post, type):
         return Response(serializers.PostSerializer(models.Post.objects.filter(pk=post.pk),
                                                    many=True, context={'request': request}).data[0])
     else:
-        return Response({'pk': post.pk})
+        return Response({'message': post.pk, 'error': 0})
 
 
 class PostRetrieveUpdateDeleteView(RetrieveUpdateDestroyAPIView):
@@ -450,15 +459,52 @@ class PostRetrieveUpdateDeleteView(RetrieveUpdateDestroyAPIView):
                 if "file" in request.FILES:
                     models.PostFile.objects.create(post=self.get_object(), file=request.data['file'])
 
-                super(PostRetrieveUpdateDeleteView, self).patch(request, *args, **kwargs)
+                context = super(PostRetrieveUpdateDeleteView, self).patch(request, *args, **kwargs)
+
+                # Notification
+                link = "group/" + str(self.get_object().group.team.pk) + "/" + str(self.get_object().group.pk) \
+                       + "/post/" + str(self.kwargs['pk']) + "/"
+                text = request.user.username + ' updated contents of post ' + context.data['header']
+                models.Notification.objects.create(group=self.get_object().group.team, text=text, link=link,
+                                                   post=self.get_object())
+
+                # Mail notify
+                members = self.get_object().group.team.user.all().exclude(pk=request.user.pk)
+                members = list(members.values_list('email', flat=True))
+                if len(members) > 0:
+                    to_mail = members.pop(0)
+                    args = []
+                    kwargs = {'mail_type': 5, 'bcc': members, 'group': self.get_object().group.team.name,
+                              'user': request.user.username, 'link': link, 'post': self.get_object().header}
+                    mails.main(to_mail=to_mail, *args, **kwargs)
+
                 return postupdateResponse(request, self.get_object(), 0)
 
             elif int(request.data['number']) is 1:
                 models.PostFile.objects.create(post=self.get_object(), file=request.data['file'])
+                super(PostRetrieveUpdateDeleteView, self).patch(request, *args, **kwargs)
                 return postupdateResponse(request, self.get_object(), 1)
 
             else:
                 models.PostFile.objects.create(post=self.get_object(), file=request.data['file'])
+
+                # Notification
+                link = "group/" + str(self.get_object().group.team.pk) + "/" + str(self.get_object().group.pk) \
+                       + "/post/" + str(self.kwargs['pk']) + "/"
+                text = request.user.username + ' updated contents of post ' + self.get_object().header
+                models.Notification.objects.create(group=self.get_object().group.team, text=text, link=link,
+                                                   post=self.get_object())
+
+                # Mail notify
+                members = self.get_object().group.team.user.all().exclude(pk=request.user.pk)
+                members = list(members.values_list('email', flat=True))
+                if len(members) > 0:
+                    to_mail = members.pop(0)
+                    args = []
+                    kwargs = {'mail_type': 5, 'bcc': members, 'group': self.get_object().group.team.name,
+                              'user': request.user.username, 'link': link, 'post': self.get_object().header}
+                    mails.main(to_mail=to_mail, *args, **kwargs)
+
                 return Response(serializers.PostSerializer(models.Post.objects.filter(pk=self.kwargs['pk']),
                                                    many=True, context={'request': request}).data[0])
 
@@ -540,16 +586,25 @@ class CommentCreateView(CreateAPIView):
     queryset = models.Post.objects.all()
 
     def post(self, request, *args, **kwargs):
-        post_file = get_object_or_404(models.PostFile, pk=self.kwargs['pk'])
-        if request.user not in post_file.post.group.team.user.all():
-            return Response({'message': 'Permission denied', 'error': 1}, status=status.HTTP_400_BAD_REQUEST)
+        if int(self.kwargs['post_type']) == 0:
+            post_file = get_object_or_404(models.Post, pk=self.kwargs['pk'])
+            post = post_file
+            request.data['post'] = post_file.pk
+            if request.user not in post_file.group.team.user.all():
+                return Response({'message': 'Permission denied', 'error': 1}, status=status.HTTP_400_BAD_REQUEST)
+        else:
+            post_file = get_object_or_404(models.PostFile, pk=self.kwargs['pk'])
+            post = post_file.post
+            request.data['postfile'] = post_file.pk
+            if request.user not in post_file.post.group.team.user.all():
+                return Response({'message': 'Permission denied', 'error': 1}, status=status.HTTP_400_BAD_REQUEST)
+
         request.data['user'] = request.user.pk
-        request.data['post'] = post_file.pk
         context = super(CommentCreateView, self).post(request, *args, **kwargs)
-        link = "group/" + str(post_file.post.group.team.pk) + "/" + str(post_file.post.group.pk) + \
-               "/post/" + str(post_file.post.pk)
-        text = request.user.username + ' commented on post ' + post_file.post.header
-        models.Notification.objects.create(group=post_file.post.group.team, text=text, link=link, post=post_file.post)
+        link = "group/" + str(post.group.team.pk) + "/" + str(post.group.pk) + \
+               "/post/" + str(post.pk)
+        text = request.user.username + ' commented on post ' + post.header
+        models.Notification.objects.create(group=post.group.team, text=text, link=link, post=post)
         return context
 
 
@@ -558,12 +613,21 @@ class CommentListView(ListAPIView):
     pagination_class = CustomPaginate
 
     def get_queryset(self):
-        return models.PostComment.objects.filter(post__pk=self.kwargs['pk']).order_by('-created_on')
+        if int(self.kwargs['post_type']) == 0:
+            return models.PostComment.objects.filter(post__pk=self.kwargs['pk']).order_by('-created_on')
+        else:
+            return models.PostComment.objects.filter(postfile__pk=self.kwargs['pk']).order_by('-created_on')
 
     def get(self, request, *args, **kwargs):
-        post_file = get_object_or_404(models.PostFile, pk=self.kwargs['pk'])
-        if request.user not in post_file.post.group.team.user.all():
-            return Response({'message': 'Permission denied', 'error': 1}, status=status.HTTP_400_BAD_REQUEST)
+        if int(self.kwargs['post_type']) == 1:
+            post_file = get_object_or_404(models.PostFile, pk=self.kwargs['pk'])
+            if request.user not in post_file.post.group.team.user.all():
+                return Response({'message': 'Permission denied', 'error': 1}, status=status.HTTP_400_BAD_REQUEST)
+        else:
+            post = get_object_or_404(models.Post, pk=self.kwargs['pk'])
+            if request.user not in post.group.team.user.all():
+                return Response({'message': 'Permission denied', 'error': 1}, status=status.HTTP_400_BAD_REQUEST)
+
         return super(CommentListView, self).get(request, *args, **kwargs)
 
 
@@ -592,8 +656,13 @@ class ReCommentCreateView(CreateAPIView):
 
     def post(self, request, *args, **kwargs):
         comment = get_object_or_404(models.PostComment, pk=self.kwargs['pk'])
-        if request.user not in comment.post.group.team.user.all():
-            return Response({'message': 'Permission denied', 'error': 1}, status=status.HTTP_400_BAD_REQUEST)
+
+        if comment.post is not None:
+            if request.user not in comment.post.group.team.user.all():
+                return Response({'message': 'Permission denied', 'error': 1}, status=status.HTTP_400_BAD_REQUEST)
+        else:
+            if request.user not in comment.postfile.post.group.team.user.all():
+                return Response({'message' : 'Permission denied', 'error': 1}, status=status.HTTP_400_BAD_REQUEST)
         request.data['user'] = request.user.pk
         request.data['comment'] = self.kwargs['pk']
         return super(ReCommentCreateView, self).post(request, *args, **kwargs)

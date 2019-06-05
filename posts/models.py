@@ -58,7 +58,8 @@ class PostTaggedUser(models.Model):
 
 class PostComment(models.Model):
     comment = models.TextField()
-    post = models.ForeignKey(PostFile, on_delete=models.CASCADE)
+    post = models.ForeignKey(Post, on_delete=models.CASCADE, null=True, blank=True)
+    postfile = models.ForeignKey(PostFile, on_delete=models.CASCADE, null=True, blank=True)
     user = models.ForeignKey(User, on_delete=models.CASCADE)
     created_on = models.DateTimeField(default=timezone.now)
 
@@ -117,4 +118,3 @@ class Notification(models.Model):
 
     def __str__(self):
         return self.group.__str__() + " -- " + self.text
-

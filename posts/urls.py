@@ -20,8 +20,8 @@ urlpatterns = [
     url(r'^post/(?P<pk>\d+)/$', views.PostRetrieveUpdateDeleteView.as_view()),
     url(r'^post/action/(?P<pk>\d+)/$', views.UpdatePostAction.as_view()),
 
-    url(r'^post/comment/add/(?P<pk>\d+)/$', views.CommentCreateView.as_view()),
-    url(r'^post/comments/(?P<pk>\d+)/$', views.CommentListView.as_view()),
+    url(r'^post/comment/add/(?P<post_type>\d+)/(?P<pk>\d+)/$', views.CommentCreateView.as_view()),
+    url(r'^post/comments/(?P<post_type>\d+)/(?P<pk>\d+)/$', views.CommentListView.as_view()),
     url(r'^post/comment/(?P<pk>\d+)/$', views.CommentRetrieveUpdateDestroyView.as_view()),
 
     url(r'^recomment/(?P<pk>\d+)/$', views.ReCommentCreateView.as_view()),

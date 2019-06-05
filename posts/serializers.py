@@ -174,7 +174,7 @@ class CommentSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = models.PostComment
-        fields = ['comment', 'post', 'created_on', 'user', 'pk', 'edit', 'postrecomment_set', 'created_by_pic']
+        fields = ['comment', 'post', 'postfile', 'created_on', 'user', 'pk', 'edit', 'postrecomment_set', 'created_by_pic']
         read_only_fields = ['created_on', 'pk', 'edit', 'postrecomment_set']
 
 
@@ -194,7 +194,8 @@ class PostFile(serializers.ModelSerializer):
 
     def to_representation(self, instance):
         context = super(PostFile, self).to_representation(instance)
-        context['file'] = BASE_URL + instance.file.url
+        context['file'] = BASE_URL[:-1] + instance.file.url
+        context['name'] = instance.file.name
         return context
 
     class Meta:
