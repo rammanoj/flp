@@ -27,7 +27,7 @@ DEBUG = True
 
 ALLOWED_HOSTS = ['*']
 
-BASE_URL = 'http://52.14.193.169/'
+BASE_URL = 'http://3.16.215.150/'
 FRONTEND_URL = "http://brandfactoryinc.herokuapp.com/"
 
 
